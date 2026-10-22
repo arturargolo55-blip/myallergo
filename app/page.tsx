@@ -19,12 +19,12 @@ export default function Home() {
   }, [router]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 to-emerald-100">
-      <div className="text-center">
-        <div className="w-16 h-16 bg-green-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
-          <span className="text-3xl">🌿</span>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 via-emerald-50 to-teal-100 dark:from-gray-950 dark:via-gray-900 dark:to-emerald-950">
+      <div className="text-center animate-pop-in">
+        <div className="w-20 h-20 bg-gradient-to-br from-green-500 to-emerald-600 rounded-3xl flex items-center justify-center mx-auto mb-5 shadow-lg animate-float animate-pulse-glow">
+          <span className="text-4xl">🌿</span>
         </div>
-        <p className="text-gray-500 text-sm animate-pulse">{t('loading')}</p>
+        <p className="text-gray-500 dark:text-gray-400 text-sm animate-pulse">{t('loading')}</p>
       </div>
     </div>
   );

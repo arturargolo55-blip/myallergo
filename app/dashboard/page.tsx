@@ -98,9 +98,9 @@ function ModalSheet({
 }) {
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center" onClick={onClose}>
-      <div className="fixed inset-0 bg-black/50" />
+      <div className="fixed inset-0 bg-black/50 animate-fade-in" />
       <div
-        className="relative z-10 w-full max-w-lg bg-white dark:bg-gray-900 rounded-t-3xl max-h-[92vh] overflow-y-auto"
+        className="relative z-10 w-full max-w-lg bg-white dark:bg-gray-900 rounded-t-3xl max-h-[92vh] overflow-y-auto animate-slide-up-modal"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex justify-center pt-3 pb-1">
@@ -236,7 +236,7 @@ function EditAllergyModal({
           </button>
           <button
             onClick={() => onSave(selected)}
-            className="flex-1 py-3 rounded-xl bg-green-600 hover:bg-green-700 text-white text-sm font-semibold"
+            className="cta-green press flex-1 py-3 rounded-xl text-white text-sm font-semibold"
           >
             {t('modal.save')}
           </button>
@@ -409,7 +409,7 @@ function EditMealModal({
           </button>
           <button
             onClick={handleSave}
-            className="flex-1 py-3 rounded-xl bg-green-600 hover:bg-green-700 text-white text-sm font-semibold"
+            className="cta-green press flex-1 py-3 rounded-xl text-white text-sm font-semibold"
           >
             {t('modal.save')}
           </button>
@@ -616,7 +616,7 @@ function EditReactionModal({
           </button>
           <button
             onClick={handleSave}
-            className="flex-1 py-3 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-semibold"
+            className="cta-red press flex-1 py-3 rounded-xl text-white text-sm font-semibold"
           >
             {t('modal.save')}
           </button>
@@ -842,7 +842,7 @@ function LogReactionModal({
           </button>
           <button
             onClick={handleSave}
-            className="flex-1 py-3 rounded-xl bg-red-500 hover:bg-red-600 text-white text-sm font-semibold"
+            className="cta-red press flex-1 py-3 rounded-xl text-white text-sm font-semibold"
           >
             {t('logReaction.register')}
           </button>
@@ -921,7 +921,7 @@ function CompactMealCard({
 
   return (
     <div
-      className={`bg-white dark:bg-gray-900 rounded-xl border overflow-hidden ${
+      className={`hover-lift bg-white dark:bg-gray-900 rounded-xl border overflow-hidden ${
         log.hasReaction
           ? 'border-red-100 dark:border-red-900'
           : 'border-gray-100 dark:border-gray-800'
@@ -971,7 +971,7 @@ function CompactMealCard({
         </button>
       </div>
       {showDeleteConfirm && (
-        <div className="px-4 pb-3 flex gap-2 border-t border-gray-100 dark:border-gray-800 pt-2.5">
+        <div className="px-4 pb-3 flex gap-2 border-t border-gray-100 dark:border-gray-800 pt-2.5 animate-fade-slide-up">
           <button
             onClick={onConfirmDelete}
             className="flex-1 text-xs bg-red-500 hover:bg-red-600 text-white py-1.5 rounded-lg font-medium"
@@ -1007,7 +1007,7 @@ function ReactionCard({ log, onEdit }: { log: MealLog; onEdit: () => void }) {
     : null;
 
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-xl border border-red-100 dark:border-red-900 px-4 py-3">
+    <div className="hover-lift bg-white dark:bg-gray-900 rounded-xl border border-red-100 dark:border-red-900 px-4 py-3">
       <div className="flex items-center gap-3">
         <span className="text-xl flex-shrink-0">{icon}</span>
         <div className="flex-1 min-w-0">
@@ -1206,7 +1206,7 @@ export default function DashboardPage() {
       )}
 
       {/* Header */}
-      <header className="bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 sticky top-0 z-30">
+      <header className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 sticky top-0 z-30">
         <div className="max-w-lg mx-auto px-4 py-4 flex items-center justify-between gap-3">
           {/* Gear menu */}
           <div className="relative">
@@ -1219,7 +1219,7 @@ export default function DashboardPage() {
             </button>
 
             {showThemeMenu && (
-              <div className="absolute left-0 top-full mt-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-xl p-4 w-52 z-30">
+              <div className="absolute left-0 top-full mt-2 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-2xl shadow-xl p-4 w-52 z-30 animate-scale-in">
                 {/* Appearance section */}
                 <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">
                   {t('settings.appearance')}
@@ -1283,7 +1283,7 @@ export default function DashboardPage() {
 
           {/* User info */}
           <div className="flex items-center gap-3 flex-1 min-w-0">
-            <div className="w-9 h-9 bg-green-600 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
+            <div className="w-9 h-9 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0 shadow-sm shadow-green-500/30">
               {initials}
             </div>
             <div className="min-w-0">
@@ -1328,26 +1328,29 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      <main className="max-w-lg mx-auto px-4 py-5 space-y-4 pb-28">
+      <main className="max-w-lg mx-auto px-4 py-5 pb-28">
         {/* ── HOME TAB ── */}
         {activeTab === 'inicio' && (
-          <>
+          <div className="space-y-4 animate-fade-slide-up">
             <div className="grid grid-cols-3 gap-3">
-              <div className="bg-white dark:bg-gray-900 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-gray-800 text-center">
-                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{logs.length}</p>
+              <div className="hover-lift bg-gradient-to-br from-emerald-50 to-green-100 dark:from-emerald-950/50 dark:to-green-950/30 rounded-2xl p-4 border border-green-100 dark:border-green-900/50 text-center animate-pop-in" style={{ animationDelay: '0s' }}>
+                <span className="text-lg">🍽️</span>
+                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100 mt-0.5">{logs.length}</p>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{t('stats.meals')}</p>
               </div>
-              <div className="bg-white dark:bg-gray-900 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-gray-800 text-center">
-                <p className="text-2xl font-bold text-red-500">{reactionCount}</p>
+              <div className="hover-lift bg-gradient-to-br from-red-50 to-orange-100 dark:from-red-950/50 dark:to-orange-950/30 rounded-2xl p-4 border border-red-100 dark:border-red-900/50 text-center animate-pop-in" style={{ animationDelay: '0.08s' }}>
+                <span className="text-lg">⚡</span>
+                <p className="text-2xl font-bold text-red-500 mt-0.5">{reactionCount}</p>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{t('stats.reactions')}</p>
               </div>
-              <div className="bg-white dark:bg-gray-900 rounded-2xl p-4 shadow-sm border border-gray-100 dark:border-gray-800 text-center">
-                <p className="text-2xl font-bold text-green-600">{profile.allergies.length}</p>
+              <div className="hover-lift bg-gradient-to-br from-amber-50 to-yellow-100 dark:from-amber-950/50 dark:to-yellow-950/30 rounded-2xl p-4 border border-amber-100 dark:border-amber-900/50 text-center animate-pop-in" style={{ animationDelay: '0.16s' }}>
+                <span className="text-lg">⚠️</span>
+                <p className="text-2xl font-bold text-amber-600 dark:text-amber-500 mt-0.5">{profile.allergies.length}</p>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{t('stats.allergies')}</p>
               </div>
             </div>
 
-            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 p-5">
+            <div className="hover-lift bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 p-5">
               <div className="flex items-center justify-between mb-3">
                 <h2 className="font-semibold text-gray-900 dark:text-gray-100">{t('home.myAllergies')}</h2>
                 <button
@@ -1375,7 +1378,7 @@ export default function DashboardPage() {
               )}
             </div>
 
-            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 p-5">
+            <div className="hover-lift bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 p-5">
               <h2 className="font-semibold text-gray-900 dark:text-gray-100 mb-3">{t('home.today')}</h2>
               {todayLogs.length === 0 ? (
                 <p className="text-sm text-gray-400 dark:text-gray-500">
@@ -1409,12 +1412,12 @@ export default function DashboardPage() {
                 </div>
               )}
             </div>
-          </>
+          </div>
         )}
 
         {/* ── MEALS TAB ── */}
         {activeTab === 'refeicoes' && (
-          <>
+          <div className="space-y-4 animate-fade-slide-up">
             <DaySelector weekDays={weekDays} selectedDay={selectedDay} onChange={setSelectedDay} />
 
             {filteredLogs.length === 0 ? (
@@ -1426,25 +1429,30 @@ export default function DashboardPage() {
               </div>
             ) : (
               <div className="space-y-2">
-                {filteredLogs.map((log) => (
-                  <CompactMealCard
+                {filteredLogs.map((log, index) => (
+                  <div
                     key={log.id}
-                    log={log}
-                    onEdit={() => openMealEdit(log)}
-                    onDelete={() => setDeleteId(log.id)}
-                    showDeleteConfirm={deleteId === log.id}
-                    onConfirmDelete={() => deleteLog(log.id)}
-                    onCancelDelete={() => setDeleteId(null)}
-                  />
+                    className="animate-fade-slide-up"
+                    style={{ animationDelay: `${index * 0.04}s` }}
+                  >
+                    <CompactMealCard
+                      log={log}
+                      onEdit={() => openMealEdit(log)}
+                      onDelete={() => setDeleteId(log.id)}
+                      showDeleteConfirm={deleteId === log.id}
+                      onConfirmDelete={() => deleteLog(log.id)}
+                      onCancelDelete={() => setDeleteId(null)}
+                    />
+                  </div>
                 ))}
               </div>
             )}
-          </>
+          </div>
         )}
 
         {/* ── REACTIONS TAB ── */}
         {activeTab === 'reacoes' && (
-          <>
+          <div className="space-y-4 animate-fade-slide-up">
             <DaySelector weekDays={weekDays} selectedDay={selectedDay} onChange={setSelectedDay} />
 
             {filteredReactions.length === 0 ? (
@@ -1460,12 +1468,18 @@ export default function DashboardPage() {
               </div>
             ) : (
               <div className="space-y-2">
-                {filteredReactions.map((log) => (
-                  <ReactionCard key={log.id} log={log} onEdit={() => openReactionEdit(log)} />
+                {filteredReactions.map((log, index) => (
+                  <div
+                    key={log.id}
+                    className="animate-fade-slide-up"
+                    style={{ animationDelay: `${index * 0.04}s` }}
+                  >
+                    <ReactionCard log={log} onEdit={() => openReactionEdit(log)} />
+                  </div>
                 ))}
               </div>
             )}
-          </>
+          </div>
         )}
       </main>
 
@@ -1474,16 +1488,20 @@ export default function DashboardPage() {
         <div className="fixed bottom-6 left-0 right-0 flex justify-center px-4">
           {activeTab === 'refeicoes' ? (
             <button
+              key="fab-meals"
               onClick={() => router.push('/log')}
-              className="bg-green-600 hover:bg-green-700 active:scale-95 text-white font-semibold px-6 py-3.5 rounded-2xl shadow-lg flex items-center gap-2"
+              className="cta-green text-white font-semibold px-6 py-3.5 rounded-2xl flex items-center gap-2 animate-scale-in"
+              style={{ transformOrigin: 'center' }}
             >
               <span className="text-lg">+</span>
               {t('meals.logButton')}
             </button>
           ) : (
             <button
+              key="fab-reactions"
               onClick={() => setShowLogReactionModal(true)}
-              className="bg-red-500 hover:bg-red-600 active:scale-95 text-white font-semibold px-6 py-3.5 rounded-2xl shadow-lg flex items-center gap-2"
+              className="cta-red text-white font-semibold px-6 py-3.5 rounded-2xl flex items-center gap-2 animate-scale-in"
+              style={{ transformOrigin: 'center' }}
             >
               <span className="text-lg">+</span>
               {t('reactions.logButton')}

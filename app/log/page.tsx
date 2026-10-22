@@ -105,11 +105,11 @@ export default function LogPage() {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
       {/* Header */}
-      <header className="bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 sticky top-0 z-10">
+      <header className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 sticky top-0 z-10">
         <div className="max-w-lg mx-auto px-4 py-4 flex items-center gap-3">
           <button
             onClick={() => router.back()}
-            className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400"
+            className="press w-9 h-9 flex items-center justify-center rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400"
           >
             ←
           </button>
@@ -119,7 +119,7 @@ export default function LogPage() {
 
       <main className="max-w-lg mx-auto px-4 py-6 space-y-5 pb-28">
         {/* Tipo e horário */}
-        <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 p-5">
+        <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 p-5 animate-fade-slide-up" style={{ animationDelay: '0s' }}>
           <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
             {t('log.mealType')}
           </p>
@@ -155,7 +155,7 @@ export default function LogPage() {
         </div>
 
         {/* Nome da refeição */}
-        <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 p-5">
+        <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 p-5 animate-fade-slide-up" style={{ animationDelay: '0.05s' }}>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
             {t('log.mealName')} <span className="text-red-400">*</span>
           </label>
@@ -176,7 +176,7 @@ export default function LogPage() {
         </div>
 
         {/* Descrição */}
-        <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 p-5">
+        <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 p-5 animate-fade-slide-up" style={{ animationDelay: '0.1s' }}>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
             {t('log.description')}
           </label>
@@ -190,7 +190,7 @@ export default function LogPage() {
         </div>
 
         {/* Foto */}
-        <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 p-5">
+        <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 p-5 animate-fade-slide-up" style={{ animationDelay: '0.15s' }}>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
             {t('log.photoLabel')}
           </label>
@@ -233,7 +233,7 @@ export default function LogPage() {
         </div>
 
         {/* Reação */}
-        <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 p-5">
+        <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 p-5 animate-fade-slide-up" style={{ animationDelay: '0.2s' }}>
           <div className="flex items-center justify-between">
             <div>
               <p className="font-medium text-gray-900 dark:text-gray-100">{t('log.reactionQuestion')}</p>
@@ -259,7 +259,7 @@ export default function LogPage() {
           </div>
 
           {hasReaction && (
-            <div className="mt-5 pt-4 border-t border-gray-100 dark:border-gray-800">
+            <div className="mt-5 pt-4 border-t border-gray-100 dark:border-gray-800 animate-fade-slide-up">
               <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
                 {t('log.symptomsQuestion')}
               </p>
@@ -301,7 +301,7 @@ export default function LogPage() {
           <button
             onClick={handleSave}
             disabled={saving}
-            className="w-full bg-green-600 hover:bg-green-700 disabled:opacity-60 active:scale-[0.98] text-white font-semibold py-3.5 rounded-2xl shadow-sm flex items-center justify-center gap-2"
+            className="cta-green w-full disabled:opacity-60 text-white font-semibold py-3.5 rounded-2xl flex items-center justify-center gap-2"
           >
             {saving ? (
               <span className="animate-pulse">{t('log.saving')}</span>
