@@ -17,7 +17,12 @@
       "Bash(git add *)",
       "Bash(git commit -m ' *)",
       "Bash(git push *)",
-      "Bash(gh auth *)"
+      "Bash(gh auth *)",
+      "Bash(brew install *)",
+      "Read(//Users/arturargologodinho/**)",
+      "Bash(ssh -T git@github.com -o StrictHostKeyChecking=accept-new -o ConnectTimeout=10)",
+      "Bash(pkill -f \"next dev\")",
+      "Bash(rm -f /tmp/shot.js /tmp/*.png)"
     ]
   }
 }
