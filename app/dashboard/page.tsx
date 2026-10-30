@@ -52,8 +52,8 @@ function getMealTime(log: MealLog): string {
 function PencilIcon() {
   return (
     <svg
-      width="13"
-      height="13"
+      width="16"
+      height="16"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -72,8 +72,8 @@ function PencilIcon() {
 function GearIcon() {
   return (
     <svg
-      width="18"
-      height="18"
+      width="22"
+      height="22"
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -877,9 +877,9 @@ function DaySelector({
           <button
             key={i}
             onClick={() => onChange(isSelected ? null : day)}
-            className={`flex-shrink-0 flex flex-col items-center px-3 py-2 rounded-xl min-w-[52px] transition-colors ${
+            className={`press flex-shrink-0 flex flex-col items-center px-3.5 py-2.5 rounded-2xl min-w-[54px] transition-colors ${
               isSelected
-                ? 'bg-green-600 text-white shadow-sm'
+                ? 'cta-green text-white'
                 : isToday
                 ? 'bg-white dark:bg-gray-900 text-green-600 dark:text-green-400 border border-green-300 dark:border-green-700'
                 : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 border border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800'
@@ -927,10 +927,10 @@ function CompactMealCard({
           : 'border-gray-100 dark:border-gray-800'
       }`}
     >
-      <div className="px-4 py-3 flex items-center gap-2.5">
-        <span className="text-xl flex-shrink-0">{icon}</span>
+      <div className="px-4 py-3 flex items-center gap-3">
+        <span className="icon-tile w-11 h-11 bg-gray-100 dark:bg-gray-800 text-2xl flex-shrink-0 shadow-none">{icon}</span>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
+          <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 truncate">
             {log.mealName}
           </p>
           {mealTypeInfo && (
@@ -1009,7 +1009,7 @@ function ReactionCard({ log, onEdit }: { log: MealLog; onEdit: () => void }) {
   return (
     <div className="hover-lift bg-white dark:bg-gray-900 rounded-xl border border-red-100 dark:border-red-900 px-4 py-3">
       <div className="flex items-center gap-3">
-        <span className="text-xl flex-shrink-0">{icon}</span>
+        <span className="icon-tile w-11 h-11 bg-red-50 dark:bg-red-950 text-2xl flex-shrink-0 shadow-none">{icon}</span>
         <div className="flex-1 min-w-0">
           <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
             {log.mealName}
@@ -1043,7 +1043,7 @@ function ReactionCard({ log, onEdit }: { log: MealLog; onEdit: () => void }) {
         </span>
       </div>
       {log.symptoms.length > 0 && (
-        <div className="mt-2 ml-9 flex flex-wrap gap-1">
+        <div className="mt-2 ml-14 flex flex-wrap gap-1">
           {log.symptoms.map((s) => (
             <span
               key={s}
@@ -1055,7 +1055,7 @@ function ReactionCard({ log, onEdit }: { log: MealLog; onEdit: () => void }) {
         </div>
       )}
       {log.reactionNotes && (
-        <p className="mt-2 ml-9 text-xs text-gray-500 dark:text-gray-400 italic">
+        <p className="mt-2 ml-14 text-xs text-gray-500 dark:text-gray-400 italic">
           {log.reactionNotes}
         </p>
       )}
@@ -1182,7 +1182,7 @@ export default function DashboardPage() {
     .toUpperCase();
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
+    <div className="min-h-screen app-bg">
       {showThemeMenu && (
         <div className="fixed inset-0 z-20" onClick={() => setShowThemeMenu(false)} />
       )}
@@ -1206,13 +1206,13 @@ export default function DashboardPage() {
       )}
 
       {/* Header */}
-      <header className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 sticky top-0 z-30">
-        <div className="max-w-lg mx-auto px-4 py-4 flex items-center justify-between gap-3">
+      <header className="bg-white/70 dark:bg-gray-900/70 backdrop-blur-xl border-b border-gray-200/70 dark:border-gray-800/70 sticky top-0 z-30">
+        <div className="max-w-lg mx-auto px-4 py-3.5 flex items-center justify-between gap-3">
           {/* Gear menu */}
           <div className="relative">
             <button
               onClick={() => setShowThemeMenu((v) => !v)}
-              className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400"
+              className="press w-11 h-11 flex items-center justify-center rounded-2xl bg-gray-100/80 dark:bg-gray-800/80 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300"
               title="Configurações"
             >
               <GearIcon />
@@ -1283,12 +1283,12 @@ export default function DashboardPage() {
 
           {/* User info */}
           <div className="flex items-center gap-3 flex-1 min-w-0">
-            <div className="w-9 h-9 bg-gradient-to-br from-green-500 to-emerald-600 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0 shadow-sm shadow-green-500/30">
+            <div className="w-11 h-11 bg-gradient-to-br from-green-500 via-emerald-500 to-teal-500 rounded-2xl flex items-center justify-center text-white text-base font-bold flex-shrink-0 shadow-lg shadow-emerald-500/40">
               {initials}
             </div>
             <div className="min-w-0">
               <p className="text-xs text-gray-500 dark:text-gray-400">{t('header.hello')}</p>
-              <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 leading-tight truncate">
+              <p className="text-base font-bold text-gray-900 dark:text-gray-100 leading-tight truncate">
                 {profile.name}
               </p>
             </div>
@@ -1296,7 +1296,7 @@ export default function DashboardPage() {
 
           <button
             onClick={resetProfile}
-            className="text-xs text-gray-400 hover:text-red-400 px-2 py-1 rounded-lg hover:bg-red-50 dark:hover:bg-red-950 flex-shrink-0"
+            className="press text-xs font-medium text-gray-400 hover:text-red-500 px-3 py-2 rounded-xl hover:bg-red-50 dark:hover:bg-red-950/60 flex-shrink-0"
           >
             {t('header.signOut')}
           </button>
@@ -1315,7 +1315,7 @@ export default function DashboardPage() {
               <button
                 key={key}
                 onClick={() => setActiveTab(key)}
-                className={`flex-1 py-3 text-sm font-medium border-b-2 -mb-px transition-colors ${
+                className={`flex-1 py-3.5 text-sm font-semibold border-b-2 -mb-px transition-colors ${
                   activeTab === key
                     ? 'border-green-600 text-green-600 dark:text-green-400 dark:border-green-400'
                     : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300'
@@ -1331,31 +1331,77 @@ export default function DashboardPage() {
       <main className="max-w-lg mx-auto px-4 py-5 pb-28">
         {/* ── HOME TAB ── */}
         {activeTab === 'inicio' && (
-          <div className="space-y-4 animate-fade-slide-up">
+          <div className="space-y-4 animate-tab">
+            {/* Hero greeting */}
+            <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-green-500 via-emerald-500 to-teal-600 p-5 text-white shadow-xl shadow-emerald-500/30 animate-pop-in">
+              <div className="absolute -top-8 -right-8 w-32 h-32 rounded-full bg-white/10 animate-float" />
+              <div className="absolute -bottom-10 -left-6 w-28 h-28 rounded-full bg-white/10" />
+              <div className="relative">
+                <p className="text-sm font-medium text-white/80">{t('header.hello')} {profile.name.split(' ')[0]} 👋</p>
+                <h1 className="text-2xl font-extrabold tracking-tight mt-1">
+                  {todayLogs.length > 0
+                    ? `${todayLogs.length} ${t('stats.meals').toLowerCase()} · ${t('home.today').toLowerCase()}`
+                    : t('home.today')}
+                </h1>
+              </div>
+            </div>
+
             <div className="grid grid-cols-3 gap-3">
-              <div className="hover-lift bg-gradient-to-br from-emerald-50 to-green-100 dark:from-emerald-950/50 dark:to-green-950/30 rounded-2xl p-4 border border-green-100 dark:border-green-900/50 text-center animate-pop-in" style={{ animationDelay: '0s' }}>
-                <span className="text-lg">🍽️</span>
-                <p className="text-2xl font-bold text-gray-900 dark:text-gray-100 mt-0.5">{logs.length}</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{t('stats.meals')}</p>
-              </div>
-              <div className="hover-lift bg-gradient-to-br from-red-50 to-orange-100 dark:from-red-950/50 dark:to-orange-950/30 rounded-2xl p-4 border border-red-100 dark:border-red-900/50 text-center animate-pop-in" style={{ animationDelay: '0.08s' }}>
-                <span className="text-lg">⚡</span>
-                <p className="text-2xl font-bold text-red-500 mt-0.5">{reactionCount}</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{t('stats.reactions')}</p>
-              </div>
-              <div className="hover-lift bg-gradient-to-br from-amber-50 to-yellow-100 dark:from-amber-950/50 dark:to-yellow-950/30 rounded-2xl p-4 border border-amber-100 dark:border-amber-900/50 text-center animate-pop-in" style={{ animationDelay: '0.16s' }}>
-                <span className="text-lg">⚠️</span>
-                <p className="text-2xl font-bold text-amber-600 dark:text-amber-500 mt-0.5">{profile.allergies.length}</p>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{t('stats.allergies')}</p>
-              </div>
+              <button
+                onClick={() => setActiveTab('refeicoes')}
+                className="press hover-lift bg-white dark:bg-gray-900/80 rounded-2xl p-4 border border-green-100 dark:border-green-900/50 text-center animate-pop-in shadow-sm"
+                style={{ animationDelay: '0s' }}
+              >
+                <div className="icon-tile w-16 h-16 mx-auto mb-2 bg-gradient-to-br from-emerald-400 to-green-600 text-4xl">🍽️</div>
+                <p className="text-3xl font-extrabold text-gray-900 dark:text-gray-100 leading-none">{logs.length}</p>
+                <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mt-1.5">{t('stats.meals')}</p>
+              </button>
+              <button
+                onClick={() => setActiveTab('reacoes')}
+                className="press hover-lift bg-white dark:bg-gray-900/80 rounded-2xl p-4 border border-red-100 dark:border-red-900/50 text-center animate-pop-in shadow-sm"
+                style={{ animationDelay: '0.08s' }}
+              >
+                <div className="icon-tile w-16 h-16 mx-auto mb-2 bg-gradient-to-br from-red-400 to-orange-500 text-4xl">⚡</div>
+                <p className="text-3xl font-extrabold text-red-500 leading-none">{reactionCount}</p>
+                <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mt-1.5">{t('stats.reactions')}</p>
+              </button>
+              <button
+                onClick={() => setShowAllergyModal(true)}
+                className="press hover-lift bg-white dark:bg-gray-900/80 rounded-2xl p-4 border border-amber-100 dark:border-amber-900/50 text-center animate-pop-in shadow-sm"
+                style={{ animationDelay: '0.16s' }}
+              >
+                <div className="icon-tile w-16 h-16 mx-auto mb-2 bg-gradient-to-br from-amber-400 to-yellow-500 text-4xl">⚠️</div>
+                <p className="text-3xl font-extrabold text-amber-600 dark:text-amber-500 leading-none">{profile.allergies.length}</p>
+                <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mt-1.5">{t('stats.allergies')}</p>
+              </button>
+            </div>
+
+            {/* Quick actions */}
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => router.push('/log')}
+                className="cta-green press text-white rounded-2xl p-4 flex items-center gap-3 text-left"
+              >
+                <span className="text-4xl">🍽️</span>
+                <span className="font-semibold text-sm leading-tight">{t('meals.logButton')}</span>
+              </button>
+              <button
+                onClick={() => setShowLogReactionModal(true)}
+                className="cta-red press text-white rounded-2xl p-4 flex items-center gap-3 text-left"
+              >
+                <span className="text-4xl">⚡</span>
+                <span className="font-semibold text-sm leading-tight">{t('reactions.logButton')}</span>
+              </button>
             </div>
 
             <div className="hover-lift bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 p-5">
               <div className="flex items-center justify-between mb-3">
-                <h2 className="font-semibold text-gray-900 dark:text-gray-100">{t('home.myAllergies')}</h2>
+                <h2 className="flex items-center gap-2 font-bold text-gray-900 dark:text-gray-100">
+                  <span className="text-2xl">⚠️</span> {t('home.myAllergies')}
+                </h2>
                 <button
                   onClick={() => setShowAllergyModal(true)}
-                  className="text-xs text-green-600 hover:text-green-700 font-medium"
+                  className="press text-xs text-green-600 hover:text-green-700 font-semibold px-2.5 py-1 rounded-lg bg-green-50 dark:bg-green-950/60"
                 >
                   {t('home.edit')}
                 </button>
@@ -1363,12 +1409,13 @@ export default function DashboardPage() {
               {profile.allergies.length > 0 ? (
                 <div className="flex flex-wrap gap-2">
                   {profile.allergies.map((a) => (
-                    <span
+                    <button
                       key={a}
-                      className="bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 text-xs font-medium px-2.5 py-1 rounded-full"
+                      onClick={() => setShowAllergyModal(true)}
+                      className="press bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 text-sm font-medium px-3 py-1.5 rounded-full hover:bg-amber-100 dark:hover:bg-amber-900"
                     >
                       ⚠️ {t('allergy.' + a)}
-                    </span>
+                    </button>
                   ))}
                 </div>
               ) : (
@@ -1379,34 +1426,41 @@ export default function DashboardPage() {
             </div>
 
             <div className="hover-lift bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 p-5">
-              <h2 className="font-semibold text-gray-900 dark:text-gray-100 mb-3">{t('home.today')}</h2>
+              <h2 className="flex items-center gap-2 font-bold text-gray-900 dark:text-gray-100 mb-3">
+                <span className="text-2xl">📅</span> {t('home.today')}
+              </h2>
               {todayLogs.length === 0 ? (
                 <p className="text-sm text-gray-400 dark:text-gray-500">
                   {t('home.noMealsToday')}
                 </p>
               ) : (
-                <div className="space-y-2">
-                  {todayLogs.map((log) => {
+                <div className="space-y-1">
+                  {todayLogs.map((log, index) => {
                     const mealTypeInfo = log.mealType
                       ? MEAL_TYPES.find((tp) => tp.value === log.mealType)
                       : null;
                     return (
-                      <div key={log.id} className="flex items-center gap-3 py-0.5">
-                        <span className="text-lg flex-shrink-0">
+                      <button
+                        key={log.id}
+                        onClick={() => (log.hasReaction ? openReactionEdit(log) : openMealEdit(log))}
+                        className="press w-full flex items-center gap-3 py-2 px-2 -mx-2 rounded-xl text-left hover:bg-gray-50 dark:hover:bg-gray-800/60 animate-fade-slide-up"
+                        style={{ animationDelay: `${index * 0.04}s` }}
+                      >
+                        <span className="icon-tile w-12 h-12 bg-gray-100 dark:bg-gray-800 text-2xl flex-shrink-0 shadow-none">
                           {mealTypeInfo?.icon ?? '🍽️'}
                         </span>
-                        <span className="flex-1 text-sm text-gray-700 dark:text-gray-300 truncate">
+                        <span className="flex-1 text-sm font-medium text-gray-700 dark:text-gray-300 truncate">
                           {log.mealName}
                         </span>
                         <span className="text-xs text-gray-400 dark:text-gray-500 flex-shrink-0">
                           {getMealTime(log)}
                         </span>
                         <span
-                          className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                          className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
                             log.hasReaction ? 'bg-red-500' : 'bg-green-500'
                           }`}
                         />
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
@@ -1417,12 +1471,12 @@ export default function DashboardPage() {
 
         {/* ── MEALS TAB ── */}
         {activeTab === 'refeicoes' && (
-          <div className="space-y-4 animate-fade-slide-up">
+          <div className="space-y-4 animate-tab">
             <DaySelector weekDays={weekDays} selectedDay={selectedDay} onChange={setSelectedDay} />
 
             {filteredLogs.length === 0 ? (
-              <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 p-8 text-center">
-                <div className="text-3xl mb-2">🍽️</div>
+              <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 p-10 text-center animate-pop-in">
+                <div className="icon-tile w-20 h-20 mx-auto mb-4 bg-gradient-to-br from-emerald-100 to-green-200 dark:from-emerald-950 dark:to-green-900 text-4xl animate-float">🍽️</div>
                 <p className="text-gray-600 dark:text-gray-400 font-medium text-sm">
                   {selectedDay ? t('meals.empty.filtered') : t('meals.empty.all')}
                 </p>
@@ -1452,12 +1506,12 @@ export default function DashboardPage() {
 
         {/* ── REACTIONS TAB ── */}
         {activeTab === 'reacoes' && (
-          <div className="space-y-4 animate-fade-slide-up">
+          <div className="space-y-4 animate-tab">
             <DaySelector weekDays={weekDays} selectedDay={selectedDay} onChange={setSelectedDay} />
 
             {filteredReactions.length === 0 ? (
-              <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 p-8 text-center">
-                <div className="text-3xl mb-2">✅</div>
+              <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 p-10 text-center animate-pop-in">
+                <div className="icon-tile w-20 h-20 mx-auto mb-4 bg-gradient-to-br from-emerald-100 to-green-200 dark:from-emerald-950 dark:to-green-900 text-4xl animate-float">✅</div>
                 <p className="text-gray-600 dark:text-gray-400 font-medium text-sm">
                   {filteredLogs.length > 0
                     ? t('reactions.empty.filtered')
@@ -1490,20 +1544,20 @@ export default function DashboardPage() {
             <button
               key="fab-meals"
               onClick={() => router.push('/log')}
-              className="cta-green text-white font-semibold px-6 py-3.5 rounded-2xl flex items-center gap-2 animate-scale-in"
+              className="cta-green press animate-pulse-glow text-white font-bold text-base px-7 py-4 rounded-2xl flex items-center gap-2.5 animate-scale-in"
               style={{ transformOrigin: 'center' }}
             >
-              <span className="text-lg">+</span>
+              <span className="text-2xl leading-none">＋</span>
               {t('meals.logButton')}
             </button>
           ) : (
             <button
               key="fab-reactions"
               onClick={() => setShowLogReactionModal(true)}
-              className="cta-red text-white font-semibold px-6 py-3.5 rounded-2xl flex items-center gap-2 animate-scale-in"
+              className="cta-red press animate-pulse-glow text-white font-bold text-base px-7 py-4 rounded-2xl flex items-center gap-2.5 animate-scale-in"
               style={{ transformOrigin: 'center' }}
             >
-              <span className="text-lg">+</span>
+              <span className="text-2xl leading-none">＋</span>
               {t('reactions.logButton')}
             </button>
           )}

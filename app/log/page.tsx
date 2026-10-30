@@ -103,17 +103,17 @@ export default function LogPage() {
   if (!profile) return null;
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
+    <div className="min-h-screen app-bg">
       {/* Header */}
-      <header className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-md border-b border-gray-100 dark:border-gray-800 sticky top-0 z-10">
-        <div className="max-w-lg mx-auto px-4 py-4 flex items-center gap-3">
+      <header className="bg-white/70 dark:bg-gray-900/70 backdrop-blur-xl border-b border-gray-200/70 dark:border-gray-800/70 sticky top-0 z-10">
+        <div className="max-w-lg mx-auto px-4 py-3.5 flex items-center gap-3">
           <button
             onClick={() => router.back()}
-            className="press w-9 h-9 flex items-center justify-center rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-400"
+            className="press w-11 h-11 flex items-center justify-center rounded-2xl bg-gray-100/80 dark:bg-gray-800/80 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-300 text-xl"
           >
             ←
           </button>
-          <h1 className="font-semibold text-gray-900 dark:text-gray-100">{t('log.title')}</h1>
+          <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100">{t('log.title')}</h1>
         </div>
       </header>
 
@@ -130,14 +130,14 @@ export default function LogPage() {
                 <button
                   key={type.value}
                   onClick={() => setMealType(selected ? '' : type.value)}
-                  className={`flex items-center gap-2.5 px-3 py-2.5 rounded-xl border text-left transition-colors ${
+                  className={`press flex items-center gap-2.5 px-3 py-3 rounded-xl border text-left transition-colors ${
                     selected
                       ? 'bg-green-50 dark:bg-green-950 border-green-400 dark:border-green-700 text-green-800 dark:text-green-300'
                       : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
                   }`}
                 >
-                  <span className="text-xl flex-shrink-0">{type.icon}</span>
-                  <span className="text-sm font-medium leading-tight">{t('meal.' + type.value)}</span>
+                  <span className="icon-tile w-10 h-10 bg-gray-100 dark:bg-gray-700/60 text-2xl flex-shrink-0 shadow-none">{type.icon}</span>
+                  <span className="text-sm font-semibold leading-tight">{t('meal.' + type.value)}</span>
                 </button>
               );
             })}
@@ -296,18 +296,18 @@ export default function LogPage() {
       </main>
 
       {/* Botão salvar */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-100 dark:border-gray-800 px-4 py-4">
+      <div className="fixed bottom-0 left-0 right-0 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-t border-gray-200/70 dark:border-gray-800/70 px-4 py-4">
         <div className="max-w-lg mx-auto">
           <button
             onClick={handleSave}
             disabled={saving}
-            className="cta-green w-full disabled:opacity-60 text-white font-semibold py-3.5 rounded-2xl flex items-center justify-center gap-2"
+            className="cta-green press w-full disabled:opacity-60 text-white font-bold text-base py-4 rounded-2xl flex items-center justify-center gap-2.5"
           >
             {saving ? (
               <span className="animate-pulse">{t('log.saving')}</span>
             ) : (
               <>
-                <span>💾</span> {t('log.save')}
+                <span className="text-xl">💾</span> {t('log.save')}
               </>
             )}
           </button>

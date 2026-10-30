@@ -60,10 +60,10 @@ export default function OnboardingPage() {
       <div className="w-full max-w-md animate-fade-slide-up">
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="w-20 h-20 bg-gradient-to-br from-green-500 to-emerald-600 rounded-3xl flex items-center justify-center mx-auto mb-4 shadow-lg animate-float animate-pulse-glow">
-            <span className="text-4xl">🌿</span>
+          <div className="w-24 h-24 bg-gradient-to-br from-green-500 via-emerald-500 to-teal-500 rounded-[2rem] flex items-center justify-center mx-auto mb-4 shadow-xl shadow-emerald-500/40 animate-float animate-pulse-glow">
+            <span className="text-5xl">🌿</span>
           </div>
-          <h1 className="text-3xl font-bold tracking-tight text-gray-900 dark:text-gray-50">Allergy Tracker</h1>
+          <h1 className="text-4xl font-extrabold tracking-tight text-gradient">MyAllergo</h1>
           <p className="text-gray-500 dark:text-gray-400 text-sm mt-1.5">{t('onboarding.subtitle')}</p>
         </div>
 

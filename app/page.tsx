@@ -19,11 +19,12 @@ export default function Home() {
   }, [router]);
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-green-50 via-emerald-50 to-teal-100 dark:from-gray-950 dark:via-gray-900 dark:to-emerald-950">
+    <div className="min-h-screen flex items-center justify-center app-bg">
       <div className="text-center animate-pop-in">
-        <div className="w-20 h-20 bg-gradient-to-br from-green-500 to-emerald-600 rounded-3xl flex items-center justify-center mx-auto mb-5 shadow-lg animate-float animate-pulse-glow">
-          <span className="text-4xl">🌿</span>
+        <div className="w-24 h-24 bg-gradient-to-br from-green-500 via-emerald-500 to-teal-500 rounded-[2rem] flex items-center justify-center mx-auto mb-5 shadow-xl shadow-emerald-500/40 animate-float animate-pulse-glow">
+          <span className="text-5xl">🌿</span>
         </div>
+        <h1 className="text-2xl font-extrabold text-gradient mb-1">MyAllergo</h1>
         <p className="text-gray-500 dark:text-gray-400 text-sm animate-pulse">{t('loading')}</p>
       </div>
     </div>

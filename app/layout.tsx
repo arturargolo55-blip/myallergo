@@ -10,7 +10,7 @@ const geist = Geist({
 });
 
 export const metadata: Metadata = {
-  title: "Allergy Tracker — Monitore suas alergias alimentares",
+  title: "MyAllergo — Monitore suas alergias alimentares",
   description: "Registre suas refeições e monitore reações alérgicas alimentares com facilidade.",
 };
 
