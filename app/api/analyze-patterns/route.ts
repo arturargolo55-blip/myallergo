@@ -72,6 +72,10 @@ export async function POST(request: Request) {
     `tend to precede allergic reactions, weighing how consistently each appears before reactions, ` +
     `the symptoms involved, and reaction intensity. Rank the most likely culprits. ` +
     `Be honest about uncertainty (small sample sizes, confounding meals). ` +
+    `Data discipline: this is correlation, not proof of causation. If there are fewer than 3 ` +
+    `logged reactions, do NOT assign "high" likelihood to any suspect — cap at "medium" and say ` +
+    `more data is needed. Only use "high" when a suspect appears before most reactions AND meals ` +
+    `without it rarely cause reactions. ` +
     `You are NOT a doctor; always include a short disclaimer that this is not medical advice and ` +
     `the user should consult an allergist for diagnosis. Write all natural-language text in ${langName}.`;
 

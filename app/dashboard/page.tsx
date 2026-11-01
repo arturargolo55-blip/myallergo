@@ -1089,26 +1089,32 @@ function MealAnalysisBadge({ log }: { log: MealLog }) {
   if (!a) return null;
 
   return (
-    <div className="mt-2 ml-14 flex flex-wrap items-center gap-1.5">
-      {typeof a.calories === 'number' && (
-        <span className="text-xs font-medium text-gray-600 dark:text-gray-300">
-          🔥 {a.calories} {t('ai.kcal')}
+    <div className="mt-2 ml-14 space-y-1">
+      <div className="flex flex-wrap items-center gap-1.5">
+        {typeof a.calories === 'number' && (
+          <span className="text-xs font-medium text-gray-600 dark:text-gray-300">
+            🔥 {a.calories} {t('ai.kcal')}
+          </span>
+        )}
+        {a.macros && (
+          <span className="text-xs text-gray-400 dark:text-gray-500">
+            · P {Math.round(a.macros.protein_g)}{t('ai.gram')} · C {Math.round(a.macros.carbs_g)}{t('ai.gram')} · G{' '}
+            {Math.round(a.macros.fat_g)}{t('ai.gram')}
+          </span>
+        )}
+        <span className="text-[11px] text-gray-400 dark:text-gray-500">
+          · {t('ai.confidence')}: {t('ai.confidence.' + a.confidence)}
         </span>
-      )}
-      {a.macros && (
-        <span className="text-xs text-gray-400 dark:text-gray-500">
-          · P {Math.round(a.macros.protein_g)}{t('ai.gram')} · C {Math.round(a.macros.carbs_g)}{t('ai.gram')} · G{' '}
-          {Math.round(a.macros.fat_g)}{t('ai.gram')}
-        </span>
-      )}
-      {a.allergens?.map((al) => (
-        <span
-          key={al}
-          className="text-xs bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800 px-2 py-0.5 rounded-full"
-        >
-          ⚠️ {al}
-        </span>
-      ))}
+        {a.allergens?.map((al) => (
+          <span
+            key={al}
+            className="text-xs bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800 px-2 py-0.5 rounded-full"
+          >
+            ⚠️ {al}
+          </span>
+        ))}
+      </div>
+      <p className="text-[11px] text-gray-400 dark:text-gray-500 italic">{t('ai.mealDisclaimer')}</p>
     </div>
   );
 }
@@ -1121,12 +1127,15 @@ const LIKELIHOOD_STYLES: Record<Likelihood, string> = {
   low: 'bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700',
 };
 
+const MIN_REACTIONS_FOR_HIGH = 3;
+
 function AIInsightsPanel({
   insight,
   loading,
   error,
   onRun,
   canRun,
+  reactionCount,
   t,
   language,
 }: {
@@ -1135,10 +1144,16 @@ function AIInsightsPanel({
   error: 'missing_key' | 'other' | null;
   onRun: () => void;
   canRun: boolean;
+  reactionCount: number;
   t: TFunction;
   language: Language;
 }) {
   const locale = language === 'en' ? 'en-US' : 'pt-BR';
+  // Not enough reactions to support a strong verdict — clamp "high" down to "medium".
+  const lowData = reactionCount < MIN_REACTIONS_FOR_HIGH;
+  const suspects = (insight?.suspects ?? []).map((s) =>
+    lowData && s.likelihood === 'high' ? { ...s, likelihood: 'medium' as Likelihood } : s
+  );
 
   return (
     <div className="hover-lift bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 p-5">
@@ -1169,9 +1184,14 @@ function AIInsightsPanel({
 
       {insight && (
         <div className="space-y-3">
-          {insight.suspects.length > 0 ? (
+          {lowData && (
+            <p className="text-xs text-amber-600 dark:text-amber-500 bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-900 rounded-lg px-3 py-2">
+              {t('ai.insights.lowData')}
+            </p>
+          )}
+          {suspects.length > 0 ? (
             <div className="space-y-2">
-              {insight.suspects.map((s, i) => (
+              {suspects.map((s, i) => (
                 <div
                   key={`${s.name}-${i}`}
                   className="rounded-xl border border-gray-100 dark:border-gray-800 p-3 animate-fade-slide-up"
@@ -1595,6 +1615,7 @@ export default function DashboardPage() {
               error={patternError}
               onRun={runPatternAnalysis}
               canRun={logs.length > 0}
+              reactionCount={reactionCount}
               t={t}
               language={language}
             />

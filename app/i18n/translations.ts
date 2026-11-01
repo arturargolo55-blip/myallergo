@@ -146,6 +146,11 @@ const pt = {
   'ai.analyzing': 'Analisando com IA…',
   'ai.kcal': 'kcal',
   'ai.gram': 'g',
+  'ai.confidence': 'confiança',
+  'ai.confidence.low': 'baixa',
+  'ai.confidence.medium': 'média',
+  'ai.confidence.high': 'alta',
+  'ai.mealDisclaimer': 'Estimativa da IA — confira o rótulo; pode faltar alérgenos ocultos.',
   'ai.unavailable': 'IA indisponível — configure a chave da API para ativar a análise.',
   'ai.likelihood.low': 'Baixa',
   'ai.likelihood.medium': 'Média',
@@ -158,6 +163,7 @@ const pt = {
   'ai.insights.error': 'Não foi possível concluir a análise. Tente novamente.',
   'ai.insights.needData': 'Registre algumas refeições e reações para a IA analisar.',
   'ai.insights.noSuspects': 'Nenhum padrão claro identificado ainda.',
+  'ai.insights.lowData': 'Poucas reações registradas — resultados preliminares. Registre mais para aumentar a confiança.',
   'ai.insights.updatedAt': 'Atualizado em {when}',
 };
 
@@ -307,6 +313,11 @@ const en: typeof pt = {
   'ai.analyzing': 'Analyzing with AI…',
   'ai.kcal': 'kcal',
   'ai.gram': 'g',
+  'ai.confidence': 'confidence',
+  'ai.confidence.low': 'low',
+  'ai.confidence.medium': 'medium',
+  'ai.confidence.high': 'high',
+  'ai.mealDisclaimer': 'AI estimate — check the label; hidden allergens may be missed.',
   'ai.unavailable': 'AI unavailable — configure the API key to enable analysis.',
   'ai.likelihood.low': 'Low',
   'ai.likelihood.medium': 'Medium',
@@ -319,6 +330,7 @@ const en: typeof pt = {
   'ai.insights.error': 'Could not complete the analysis. Please try again.',
   'ai.insights.needData': 'Log some meals and reactions for the AI to analyze.',
   'ai.insights.noSuspects': 'No clear pattern identified yet.',
+  'ai.insights.lowData': 'Few reactions logged — preliminary results. Log more to increase confidence.',
   'ai.insights.updatedAt': 'Updated {when}',
 };
 
