@@ -1364,7 +1364,7 @@ function ChatSheet({ log, onClose }: { log: MealLog; onClose: () => void }) {
     setInput('');
     setLoading(true);
     setError(null);
-    const res = await askAI(summary, next, language);
+    const res = await askAI(summary, next, language, log.photoUrl);
     if (res.reply) {
       setMessages([...next, { role: 'assistant', content: res.reply }]);
     } else {

@@ -11,6 +11,14 @@ interface ChatMessage {
   content: string;
 }
 
+type MediaType = 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
+
+function parseDataUrl(dataUrl: string): { media_type: MediaType; data: string } | null {
+  const match = /^data:(image\/(?:jpeg|png|gif|webp));base64,(.+)$/.exec(dataUrl);
+  if (!match) return null;
+  return { media_type: match[1] as MediaType, data: match[2] };
+}
+
 export async function POST(request: Request) {
   if (!process.env.ANTHROPIC_API_KEY) {
     return NextResponse.json(
@@ -19,14 +27,14 @@ export async function POST(request: Request) {
     );
   }
 
-  let body: { summary?: string; messages?: ChatMessage[]; language?: string };
+  let body: { summary?: string; messages?: ChatMessage[]; language?: string; photoDataUrl?: string };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: 'bad_request', message: 'Invalid JSON body.' }, { status: 400 });
   }
 
-  const { summary = '', messages = [], language = 'pt' } = body;
+  const { summary = '', messages = [], language = 'pt', photoDataUrl } = body;
   const turns = messages
     .filter((m) => (m.role === 'user' || m.role === 'assistant') && m.content?.trim())
     .slice(-MAX_TURNS);
@@ -44,7 +52,21 @@ export async function POST(request: Request) {
     `Answer concisely and conversationally. You may explain the nutrition/allergen estimates, help ` +
     `interpret the reaction, and suggest what to watch for or discuss with a professional. You are NOT ` +
     `a doctor — for diagnosis or treatment decisions, remind the user to consult an allergist. If the ` +
-    `question is unrelated to their food allergies or this log, gently steer back. Reply in ${langName}.`;
+    `question is unrelated to their food allergies or this log, gently steer back. ` +
+    `If a photo of the logged item is included, use it when answering. Reply in ${langName}.`;
+
+  // Attach the logged photo (if any) to the first user turn so the model can see it.
+  const img = photoDataUrl ? parseDataUrl(photoDataUrl) : null;
+  const apiMessages: Anthropic.MessageParam[] = turns.map((m) => ({ role: m.role, content: m.content }));
+  if (img) {
+    const firstUser = apiMessages.find((m) => m.role === 'user');
+    if (firstUser) {
+      firstUser.content = [
+        { type: 'image', source: { type: 'base64', ...img } },
+        { type: 'text', text: typeof firstUser.content === 'string' ? firstUser.content : '' },
+      ];
+    }
+  }
 
   try {
     const message = await client.messages.create({
@@ -53,7 +75,7 @@ export async function POST(request: Request) {
       thinking: { type: 'adaptive' },
       system,
       output_config: { effort: 'low' },
-      messages: turns.map((m) => ({ role: m.role, content: m.content })),
+      messages: apiMessages,
     });
 
     const textBlock = message.content.find((b) => b.type === 'text');

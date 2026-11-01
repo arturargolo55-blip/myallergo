@@ -127,13 +127,14 @@ export function buildLogSummary(log: MealLog): string {
 export async function askAI(
   summary: string,
   messages: ChatMessage[],
-  language: Language
+  language: Language,
+  photoDataUrl?: string
 ): Promise<{ reply?: string; error?: 'missing_key' | 'other' }> {
   try {
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ summary, messages, language }),
+      body: JSON.stringify({ summary, messages, language, photoDataUrl }),
     });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
