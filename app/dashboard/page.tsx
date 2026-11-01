@@ -1000,7 +1000,21 @@ function CompactMealCard({
 
 // ─── ReactionCard ─────────────────────────────────────────────────────────────
 
-function ReactionCard({ log, onEdit }: { log: MealLog; onEdit: () => void }) {
+function ReactionCard({
+  log,
+  onEdit,
+  onDelete,
+  showDeleteConfirm,
+  onConfirmDelete,
+  onCancelDelete,
+}: {
+  log: MealLog;
+  onEdit: () => void;
+  onDelete: () => void;
+  showDeleteConfirm: boolean;
+  onConfirmDelete: () => void;
+  onCancelDelete: () => void;
+}) {
   const { language, t } = useLanguage();
   // Reactions always use the ⚡ icon, never a meal-type plate icon.
   const icon = '⚡';
@@ -1049,6 +1063,13 @@ function ReactionCard({ log, onEdit }: { log: MealLog; onEdit: () => void }) {
         <span className="text-xs bg-red-50 dark:bg-red-950 text-red-600 dark:text-red-400 px-2 py-0.5 rounded-full border border-red-200 dark:border-red-800 flex-shrink-0">
           {t('reactions.badge')}
         </span>
+        <button
+          onClick={onDelete}
+          className="text-gray-300 dark:text-gray-600 hover:text-red-400 text-base flex-shrink-0 px-0.5 leading-none"
+          title={t('modal.delete')}
+        >
+          ···
+        </button>
       </div>
       {log.symptoms.length > 0 && (
         <div className="mt-2 ml-14 flex flex-wrap gap-1">
@@ -1068,6 +1089,22 @@ function ReactionCard({ log, onEdit }: { log: MealLog; onEdit: () => void }) {
         </p>
       )}
       {(log.analysis || log.analysisStatus === 'pending') && <MealAnalysisBadge log={log} kind="reaction" />}
+      {showDeleteConfirm && (
+        <div className="mt-3 flex gap-2 border-t border-gray-100 dark:border-gray-800 pt-2.5 animate-fade-slide-up">
+          <button
+            onClick={onConfirmDelete}
+            className="flex-1 text-xs bg-red-500 hover:bg-red-600 text-white py-1.5 rounded-lg font-medium"
+          >
+            {t('meals.confirmDelete')}
+          </button>
+          <button
+            onClick={onCancelDelete}
+            className="flex-1 text-xs bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-600 dark:text-gray-400 py-1.5 rounded-lg font-medium"
+          >
+            {t('meals.cancel')}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -1777,7 +1814,14 @@ export default function DashboardPage() {
                     className="animate-fade-slide-up"
                     style={{ animationDelay: `${index * 0.04}s` }}
                   >
-                    <ReactionCard log={log} onEdit={() => openReactionEdit(log)} />
+                    <ReactionCard
+                      log={log}
+                      onEdit={() => openReactionEdit(log)}
+                      onDelete={() => setDeleteId(log.id)}
+                      showDeleteConfirm={deleteId === log.id}
+                      onConfirmDelete={() => deleteLog(log.id)}
+                      onCancelDelete={() => setDeleteId(null)}
+                    />
                   </div>
                 ))}
               </div>
