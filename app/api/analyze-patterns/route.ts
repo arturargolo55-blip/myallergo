@@ -4,7 +4,7 @@ import Anthropic from '@anthropic-ai/sdk';
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
-const MODEL = 'claude-opus-4-8';
+const MODEL = 'claude-sonnet-4-6';
 
 const INSIGHT_SCHEMA = {
   type: 'object',
@@ -86,7 +86,7 @@ export async function POST(request: Request) {
       model: MODEL,
       max_tokens: 4096,
       thinking: { type: 'adaptive' },
-      output_config: { effort: 'high', format: { type: 'json_schema', schema: INSIGHT_SCHEMA } },
+      output_config: { effort: 'medium', format: { type: 'json_schema', schema: INSIGHT_SCHEMA } },
       system,
       messages: [{ role: 'user', content: userText }],
     });

@@ -3,7 +3,7 @@ import Anthropic from '@anthropic-ai/sdk';
 
 export const runtime = 'nodejs';
 
-const MODEL = 'claude-opus-4-8';
+const MODEL = 'claude-sonnet-4-6';
 
 // Guaranteed response shape (see app/types.ts → MealAnalysis, minus analyzedAt).
 const ANALYSIS_SCHEMA = {
@@ -102,7 +102,8 @@ export async function POST(request: Request) {
       max_tokens: 2048,
       thinking: { type: 'adaptive' },
       system,
-      output_config: { format: { type: 'json_schema', schema: ANALYSIS_SCHEMA } },
+      // Simple extraction — keep effort low so Sonnet answers fast.
+      output_config: { effort: 'low', format: { type: 'json_schema', schema: ANALYSIS_SCHEMA } },
       messages: [{ role: 'user', content }],
     });
 
