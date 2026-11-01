@@ -124,24 +124,31 @@ export function buildLogSummary(log: MealLog): string {
   return lines.join('\n');
 }
 
+export interface ChatResult {
+  reply?: string;
+  mealUpdate?: Partial<MealAnalysis>;
+  reactionUpdate?: Partial<ReactionAnalysis>;
+  error?: 'missing_key' | 'other';
+}
+
 export async function askAI(
   summary: string,
   messages: ChatMessage[],
   language: Language,
-  photoDataUrl?: string
-): Promise<{ reply?: string; error?: 'missing_key' | 'other' }> {
+  opts: { photoDataUrl?: string; kind?: 'meal' | 'reaction' } = {}
+): Promise<ChatResult> {
   try {
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ summary, messages, language, photoDataUrl }),
+      body: JSON.stringify({ summary, messages, language, photoDataUrl: opts.photoDataUrl, kind: opts.kind }),
     });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
       return { error: data?.error === 'missing_key' ? 'missing_key' : 'other' };
     }
-    const data = (await res.json()) as { reply: string };
-    return { reply: data.reply };
+    const data = (await res.json()) as ChatResult;
+    return { reply: data.reply, mealUpdate: data.mealUpdate, reactionUpdate: data.reactionUpdate };
   } catch {
     return { error: 'other' };
   }

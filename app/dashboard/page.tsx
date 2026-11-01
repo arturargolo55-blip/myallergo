@@ -6,7 +6,9 @@ import {
   COMMON_ALLERGIES,
   COMMON_SYMPTOMS,
   Likelihood,
+  MealAnalysis,
   MealLog,
+  ReactionAnalysis,
   MEAL_TYPES,
   MealType,
   PatternInsight,
@@ -1339,7 +1341,15 @@ function AIInsightsPanel({
 
 // ─── ChatSheet ──────────────────────────────────────────────────────────────
 
-function ChatSheet({ log, onClose }: { log: MealLog; onClose: () => void }) {
+function ChatSheet({
+  log,
+  onClose,
+  onUpdate,
+}: {
+  log: MealLog;
+  onClose: () => void;
+  onUpdate: (update: { mealUpdate?: Partial<MealAnalysis>; reactionUpdate?: Partial<ReactionAnalysis> }) => void;
+}) {
   const { t, language } = useLanguage();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
@@ -1364,10 +1374,16 @@ function ChatSheet({ log, onClose }: { log: MealLog; onClose: () => void }) {
     setInput('');
     setLoading(true);
     setError(null);
-    const res = await askAI(summary, next, language, log.photoUrl);
+    const res = await askAI(summary, next, language, {
+      photoDataUrl: log.photoUrl,
+      kind: log.hasReaction ? 'reaction' : 'meal',
+    });
+    if (res.mealUpdate || res.reactionUpdate) {
+      onUpdate({ mealUpdate: res.mealUpdate, reactionUpdate: res.reactionUpdate });
+    }
     if (res.reply) {
       setMessages([...next, { role: 'assistant', content: res.reply }]);
-    } else {
+    } else if (!res.mealUpdate && !res.reactionUpdate) {
       setError(res.error ?? 'other');
     }
     setLoading(false);
@@ -1575,6 +1591,40 @@ export default function DashboardPage() {
     setPatternLoading(false);
   };
 
+  // Apply an analysis correction the chat produced, persisting it to the log.
+  const applyAnalysisUpdate = (
+    id: string,
+    update: { mealUpdate?: Partial<MealAnalysis>; reactionUpdate?: Partial<ReactionAnalysis> }
+  ) => {
+    const now = new Date().toISOString();
+    const updated = logs.map((l) => {
+      if (l.id !== id) return l;
+      if (update.mealUpdate) {
+        const base: MealAnalysis = l.analysis ?? { allergens: [], confidence: 'medium', analyzedAt: now };
+        return { ...l, analysis: { ...base, ...update.mealUpdate, analyzedAt: now }, analysisStatus: 'done' as const };
+      }
+      if (update.reactionUpdate) {
+        const base: ReactionAnalysis = l.reactionAnalysis ?? {
+          assessment: '',
+          possibleTriggers: [],
+          urgency: 'routine',
+          confidence: 'medium',
+          analyzedAt: now,
+        };
+        return {
+          ...l,
+          reactionAnalysis: { ...base, ...update.reactionUpdate, analyzedAt: now },
+          reactionAnalysisStatus: 'done' as const,
+        };
+      }
+      return l;
+    });
+    setLogs(updated);
+    localStorage.setItem(STORAGE_KEYS.LOGS, JSON.stringify(updated));
+    const newLog = updated.find((l) => l.id === id) ?? null;
+    setChatLog((prev) => (prev && prev.id === id ? newLog : prev));
+  };
+
   const saveAllergies = (newAllergies: string[]) => {
     const updatedProfile = { ...profile!, allergies: newAllergies };
     setProfile(updatedProfile);
@@ -1640,7 +1690,13 @@ export default function DashboardPage() {
         <LogReactionModal onSave={addLog} onClose={() => setShowLogReactionModal(false)} />
       )}
 
-      {chatLog && <ChatSheet log={chatLog} onClose={() => setChatLog(null)} />}
+      {chatLog && (
+        <ChatSheet
+          log={chatLog}
+          onClose={() => setChatLog(null)}
+          onUpdate={(u) => applyAnalysisUpdate(chatLog.id, u)}
+        />
+      )}
 
       {showAllergyModal && profile && (
         <EditAllergyModal
