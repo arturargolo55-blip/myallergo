@@ -1713,7 +1713,7 @@ export default function DashboardPage() {
       )}
 
       {/* Header */}
-      <header className="bg-white/70 dark:bg-gray-900/70 backdrop-blur-xl border-b border-gray-200/70 dark:border-gray-800/70 sticky top-0 z-30">
+      <header className="bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl border-b border-gray-200/70 dark:border-gray-800/70 sticky top-0 z-30">
         <div className="max-w-lg mx-auto px-4 py-3.5 flex items-center justify-between gap-3">
           {/* Gear menu */}
           <div className="relative">

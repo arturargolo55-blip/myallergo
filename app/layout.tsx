@@ -27,7 +27,9 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className="min-h-full bg-gray-50 dark:bg-gray-950 antialiased">
+      {/* Background color comes from globals.css (html/body) so overscroll
+          matches the theme; the aurora gradient is a fixed body::before layer. */}
+      <body className="min-h-full antialiased">
         <LanguageProvider>
           <ThemeProvider>{children}</ThemeProvider>
         </LanguageProvider>

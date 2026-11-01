@@ -115,7 +115,7 @@ export default function LogPage() {
   return (
     <div className="min-h-screen app-bg">
       {/* Header */}
-      <header className="bg-white/70 dark:bg-gray-900/70 backdrop-blur-xl border-b border-gray-200/70 dark:border-gray-800/70 sticky top-0 z-10">
+      <header className="bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl border-b border-gray-200/70 dark:border-gray-800/70 sticky top-0 z-10">
         <div className="max-w-lg mx-auto px-4 py-3.5 flex items-center gap-3">
           <button
             onClick={() => router.back()}
@@ -306,7 +306,7 @@ export default function LogPage() {
       </main>
 
       {/* Botão salvar */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white/80 dark:bg-gray-900/80 backdrop-blur-xl border-t border-gray-200/70 dark:border-gray-800/70 px-4 py-4">
+      <div className="fixed bottom-0 left-0 right-0 bg-white/90 dark:bg-gray-900/90 backdrop-blur-xl border-t border-gray-200/70 dark:border-gray-800/70 px-4 py-4">
         <div className="max-w-lg mx-auto">
           <button
             onClick={handleSave}

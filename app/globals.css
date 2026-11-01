@@ -9,8 +9,46 @@
   box-sizing: border-box;
 }
 
+/* Theme base color on BOTH html and body so overscroll (rubber-band) never
+   reveals a black/white gutter that differs from the theme. */
+html,
+body {
+  background-color: #f4fbf6;
+  /* Remove the rubber-band overscroll that exposes the area behind the page. */
+  overscroll-behavior-y: none;
+}
+html.dark,
+.dark body {
+  background-color: #060d0a;
+}
+
 body {
   font-family: var(--font-geist), Arial, Helvetica, sans-serif;
+}
+
+/* Aurora-mesh gradient lives on a FIXED layer behind all content: it always
+   covers the full viewport and never scrolls, so no scroll speed can expose a
+   gap. Uses position:fixed (NOT background-attachment:fixed, which janks on
+   Safari/iOS). The base colors above show through the gradient's transparent
+   areas. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image:
+    radial-gradient(60% 55% at 12% 8%, rgb(16 185 129 / 0.16) 0%, transparent 60%),
+    radial-gradient(55% 50% at 92% 4%, rgb(45 212 191 / 0.16) 0%, transparent 55%),
+    radial-gradient(60% 60% at 88% 96%, rgb(132 204 22 / 0.12) 0%, transparent 60%),
+    radial-gradient(50% 50% at 4% 92%, rgb(34 197 94 / 0.12) 0%, transparent 55%);
+}
+.dark body::before {
+  background-image:
+    radial-gradient(60% 55% at 12% 8%, rgb(16 185 129 / 0.16) 0%, transparent 60%),
+    radial-gradient(55% 50% at 92% 4%, rgb(13 148 136 / 0.18) 0%, transparent 55%),
+    radial-gradient(60% 60% at 88% 96%, rgb(22 163 74 / 0.14) 0%, transparent 60%),
+    radial-gradient(50% 50% at 4% 92%, rgb(5 150 105 / 0.14) 0%, transparent 55%);
 }
 
 button, a, input, textarea, label {
@@ -37,24 +75,14 @@ button:active:not(:disabled) {
   transform: scale(0.94);
 }
 
-/* ─── Vivid app background (aurora mesh) ─────────────────────────────── */
+/* ─── App background container ───────────────────────────────────────────
+   The aurora-mesh gradient now lives on the fixed `body::before` layer above,
+   so this container is transparent and just guarantees full-viewport height
+   (100dvh with a 100vh fallback) so short pages don't leave empty space. */
 .app-bg {
-  background-color: #f4fbf6;
-  background-image:
-    radial-gradient(60% 55% at 12% 8%, rgb(16 185 129 / 0.16) 0%, transparent 60%),
-    radial-gradient(55% 50% at 92% 4%, rgb(45 212 191 / 0.16) 0%, transparent 55%),
-    radial-gradient(60% 60% at 88% 96%, rgb(132 204 22 / 0.12) 0%, transparent 60%),
-    radial-gradient(50% 50% at 4% 92%, rgb(34 197 94 / 0.12) 0%, transparent 55%);
-  background-attachment: fixed;
-}
-.dark .app-bg {
-  background-color: #060d0a;
-  background-image:
-    radial-gradient(60% 55% at 12% 8%, rgb(16 185 129 / 0.16) 0%, transparent 60%),
-    radial-gradient(55% 50% at 92% 4%, rgb(13 148 136 / 0.18) 0%, transparent 55%),
-    radial-gradient(60% 60% at 88% 96%, rgb(22 163 74 / 0.14) 0%, transparent 60%),
-    radial-gradient(50% 50% at 4% 92%, rgb(5 150 105 / 0.14) 0%, transparent 55%);
-  background-attachment: fixed;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: transparent;
 }
 
 /* Big, vivid icon tiles */
