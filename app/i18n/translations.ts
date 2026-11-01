@@ -142,6 +142,23 @@ const pt = {
   'day.4': 'Sex',
   'day.5': 'Sáb',
   'day.6': 'Dom',
+
+  'ai.analyzing': 'Analisando com IA…',
+  'ai.kcal': 'kcal',
+  'ai.gram': 'g',
+  'ai.unavailable': 'IA indisponível — configure a chave da API para ativar a análise.',
+  'ai.likelihood.low': 'Baixa',
+  'ai.likelihood.medium': 'Média',
+  'ai.likelihood.high': 'Alta',
+  'ai.insights.title': 'Análise Inteligente',
+  'ai.insights.subtitle': 'A IA cruza suas refeições e reações para encontrar possíveis causas.',
+  'ai.insights.run': 'Analisar padrões',
+  'ai.insights.refresh': 'Atualizar',
+  'ai.insights.analyzing': 'Analisando…',
+  'ai.insights.error': 'Não foi possível concluir a análise. Tente novamente.',
+  'ai.insights.needData': 'Registre algumas refeições e reações para a IA analisar.',
+  'ai.insights.noSuspects': 'Nenhum padrão claro identificado ainda.',
+  'ai.insights.updatedAt': 'Atualizado em {when}',
 };
 
 const en: typeof pt = {
@@ -286,6 +303,23 @@ const en: typeof pt = {
   'day.4': 'Fri',
   'day.5': 'Sat',
   'day.6': 'Sun',
+
+  'ai.analyzing': 'Analyzing with AI…',
+  'ai.kcal': 'kcal',
+  'ai.gram': 'g',
+  'ai.unavailable': 'AI unavailable — configure the API key to enable analysis.',
+  'ai.likelihood.low': 'Low',
+  'ai.likelihood.medium': 'Medium',
+  'ai.likelihood.high': 'High',
+  'ai.insights.title': 'Smart Analysis',
+  'ai.insights.subtitle': 'AI cross-references your meals and reactions to find possible causes.',
+  'ai.insights.run': 'Analyze patterns',
+  'ai.insights.refresh': 'Refresh',
+  'ai.insights.analyzing': 'Analyzing…',
+  'ai.insights.error': 'Could not complete the analysis. Please try again.',
+  'ai.insights.needData': 'Log some meals and reactions for the AI to analyze.',
+  'ai.insights.noSuspects': 'No clear pattern identified yet.',
+  'ai.insights.updatedAt': 'Updated {when}',
 };
 
 export const translations: Record<Language, typeof pt> = { pt, en };

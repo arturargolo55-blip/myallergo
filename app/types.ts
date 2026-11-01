@@ -35,6 +35,23 @@ export const REACTION_INTENSITIES: { value: ReactionIntensity; label: string; em
   { value: 'grave', label: 'Grave', emoji: '🔴' },
 ];
 
+export type AnalysisStatus = 'pending' | 'done' | 'error';
+
+export interface MealMacros {
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+}
+
+export interface MealAnalysis {
+  calories?: number;
+  macros?: MealMacros;
+  allergens: string[];
+  ingredients?: string[];
+  confidence: 'low' | 'medium' | 'high';
+  analyzedAt: string;
+}
+
 export interface MealLog {
   id: string;
   description: string;
@@ -47,6 +64,24 @@ export interface MealLog {
   reactionIntensity?: ReactionIntensity;
   reactionNotes?: string;
   createdAt: string;
+  analysis?: MealAnalysis;
+  analysisStatus?: AnalysisStatus;
+}
+
+export type Likelihood = 'low' | 'medium' | 'high';
+
+export interface PatternSuspect {
+  name: string;
+  likelihood: Likelihood;
+  evidence: string;
+  reactionCount: number;
+}
+
+export interface PatternInsight {
+  suspects: PatternSuspect[];
+  summary: string;
+  disclaimer: string;
+  generatedAt: string;
 }
 
 export const COMMON_ALLERGIES = [
@@ -76,4 +111,5 @@ export const COMMON_SYMPTOMS = [
 export const STORAGE_KEYS = {
   PROFILE: 'allergy-tracker-profile',
   LOGS: 'allergy-tracker-logs',
+  AI_INSIGHTS: 'allergy-tracker-ai-insights',
 } as const;

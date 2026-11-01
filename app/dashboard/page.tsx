@@ -5,9 +5,11 @@ import { useRouter } from 'next/navigation';
 import {
   COMMON_ALLERGIES,
   COMMON_SYMPTOMS,
+  Likelihood,
   MealLog,
   MEAL_TYPES,
   MealType,
+  PatternInsight,
   REACTION_INTENSITIES,
   ReactionIntensity,
   STORAGE_KEYS,
@@ -15,7 +17,8 @@ import {
 } from '../types';
 import { useTheme } from '../components/ThemeProvider';
 import { useLanguage } from '../components/LanguageProvider';
-import { Language } from '../i18n/translations';
+import { Language, TFunction } from '../i18n/translations';
+import { analyzeMealLog, analyzePatterns } from '../lib/ai';
 
 const MAX_PHOTO_MB = 1.5;
 
@@ -970,6 +973,11 @@ function CompactMealCard({
           ···
         </button>
       </div>
+      {(log.analysis || log.analysisStatus === 'pending') && (
+        <div className="px-4 pb-3">
+          <MealAnalysisBadge log={log} />
+        </div>
+      )}
       {showDeleteConfirm && (
         <div className="px-4 pb-3 flex gap-2 border-t border-gray-100 dark:border-gray-800 pt-2.5 animate-fade-slide-up">
           <button
@@ -1059,6 +1067,151 @@ function ReactionCard({ log, onEdit }: { log: MealLog; onEdit: () => void }) {
           {log.reactionNotes}
         </p>
       )}
+      {(log.analysis || log.analysisStatus === 'pending') && <MealAnalysisBadge log={log} />}
+    </div>
+  );
+}
+
+// ─── MealAnalysisBadge ──────────────────────────────────────────────────────
+
+function MealAnalysisBadge({ log }: { log: MealLog }) {
+  const { t } = useLanguage();
+
+  if (log.analysisStatus === 'pending') {
+    return (
+      <p className="mt-2 ml-14 text-xs text-gray-400 dark:text-gray-500 animate-pulse">
+        ✨ {t('ai.analyzing')}
+      </p>
+    );
+  }
+
+  const a = log.analysis;
+  if (!a) return null;
+
+  return (
+    <div className="mt-2 ml-14 flex flex-wrap items-center gap-1.5">
+      {typeof a.calories === 'number' && (
+        <span className="text-xs font-medium text-gray-600 dark:text-gray-300">
+          🔥 {a.calories} {t('ai.kcal')}
+        </span>
+      )}
+      {a.macros && (
+        <span className="text-xs text-gray-400 dark:text-gray-500">
+          · P {Math.round(a.macros.protein_g)}{t('ai.gram')} · C {Math.round(a.macros.carbs_g)}{t('ai.gram')} · G{' '}
+          {Math.round(a.macros.fat_g)}{t('ai.gram')}
+        </span>
+      )}
+      {a.allergens?.map((al) => (
+        <span
+          key={al}
+          className="text-xs bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800 px-2 py-0.5 rounded-full"
+        >
+          ⚠️ {al}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+// ─── AIInsightsPanel ────────────────────────────────────────────────────────
+
+const LIKELIHOOD_STYLES: Record<Likelihood, string> = {
+  high: 'bg-red-50 dark:bg-red-950 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800',
+  medium: 'bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800',
+  low: 'bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 border-gray-200 dark:border-gray-700',
+};
+
+function AIInsightsPanel({
+  insight,
+  loading,
+  error,
+  onRun,
+  canRun,
+  t,
+  language,
+}: {
+  insight: PatternInsight | null;
+  loading: boolean;
+  error: 'missing_key' | 'other' | null;
+  onRun: () => void;
+  canRun: boolean;
+  t: TFunction;
+  language: Language;
+}) {
+  const locale = language === 'en' ? 'en-US' : 'pt-BR';
+
+  return (
+    <div className="hover-lift bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 p-5">
+      <div className="flex items-center justify-between mb-1">
+        <h2 className="flex items-center gap-2 font-bold text-gray-900 dark:text-gray-100">
+          <span className="text-2xl">🧠</span> {t('ai.insights.title')}
+        </h2>
+        <button
+          onClick={onRun}
+          disabled={loading || !canRun}
+          className="press text-xs font-semibold px-3 py-1.5 rounded-lg bg-green-50 dark:bg-green-950/60 text-green-700 dark:text-green-400 disabled:opacity-40"
+        >
+          {loading ? t('ai.insights.analyzing') : insight ? t('ai.insights.refresh') : t('ai.insights.run')}
+        </button>
+      </div>
+      <p className="text-xs text-gray-400 dark:text-gray-500 mb-3">{t('ai.insights.subtitle')}</p>
+
+      {!canRun && !insight && (
+        <p className="text-sm text-gray-400 dark:text-gray-500">{t('ai.insights.needData')}</p>
+      )}
+
+      {error === 'missing_key' && (
+        <p className="text-sm text-amber-600 dark:text-amber-500">{t('ai.unavailable')}</p>
+      )}
+      {error === 'other' && (
+        <p className="text-sm text-red-500">{t('ai.insights.error')}</p>
+      )}
+
+      {insight && (
+        <div className="space-y-3">
+          {insight.suspects.length > 0 ? (
+            <div className="space-y-2">
+              {insight.suspects.map((s, i) => (
+                <div
+                  key={`${s.name}-${i}`}
+                  className="rounded-xl border border-gray-100 dark:border-gray-800 p-3 animate-fade-slide-up"
+                  style={{ animationDelay: `${i * 0.05}s` }}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-semibold text-sm text-gray-900 dark:text-gray-100">{s.name}</span>
+                    <span
+                      className={`text-xs font-medium px-2 py-0.5 rounded-full border ${LIKELIHOOD_STYLES[s.likelihood]}`}
+                    >
+                      {t('ai.likelihood.' + s.likelihood)}
+                    </span>
+                  </div>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{s.evidence}</p>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-400 dark:text-gray-500">{t('ai.insights.noSuspects')}</p>
+          )}
+
+          {insight.summary && (
+            <p className="text-sm text-gray-700 dark:text-gray-300">{insight.summary}</p>
+          )}
+
+          <p className="text-xs text-gray-400 dark:text-gray-500 italic border-t border-gray-100 dark:border-gray-800 pt-2">
+            ⚕️ {insight.disclaimer}
+          </p>
+          <p className="text-[11px] text-gray-300 dark:text-gray-600">
+            {t('ai.insights.updatedAt', {
+              when: new Date(insight.generatedAt).toLocaleString(locale, {
+                day: '2-digit',
+                month: 'short',
+                hour: '2-digit',
+                minute: '2-digit',
+              }),
+            })}
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -1082,6 +1235,10 @@ export default function DashboardPage() {
   const [showAllergyModal, setShowAllergyModal] = useState(false);
   const [showLogReactionModal, setShowLogReactionModal] = useState(false);
 
+  const [patternInsight, setPatternInsight] = useState<PatternInsight | null>(null);
+  const [patternLoading, setPatternLoading] = useState(false);
+  const [patternError, setPatternError] = useState<'missing_key' | 'other' | null>(null);
+
   const weekDays = useMemo(() => getWeekDays(), []);
 
   useEffect(() => {
@@ -1099,7 +1256,30 @@ export default function DashboardPage() {
         parsed.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       );
     }
+
+    const rawInsight = localStorage.getItem(STORAGE_KEYS.AI_INSIGHTS);
+    if (rawInsight) {
+      try {
+        setPatternInsight(JSON.parse(rawInsight));
+      } catch {
+        /* ignore malformed cache */
+      }
+    }
   }, [router]);
+
+  // While any meal analysis is in flight (written from the /log page or the quick-reaction
+  // modal), re-read localStorage until it lands so the cards update in place.
+  const hasPending = useMemo(() => logs.some((l) => l.analysisStatus === 'pending'), [logs]);
+  useEffect(() => {
+    if (!hasPending) return;
+    const id = setInterval(() => {
+      const raw = localStorage.getItem(STORAGE_KEYS.LOGS);
+      if (!raw) return;
+      const parsed: MealLog[] = JSON.parse(raw);
+      setLogs(parsed.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+    }, 2500);
+    return () => clearInterval(id);
+  }, [hasPending]);
 
   const deleteLog = (id: string) => {
     const updated = logs.filter((l) => l.id !== id);
@@ -1122,12 +1302,27 @@ export default function DashboardPage() {
   };
 
   const addLog = (newLog: MealLog) => {
-    const updated = [newLog, ...logs].sort(
+    const logToAdd: MealLog = { ...newLog, analysisStatus: 'pending' };
+    const updated = [logToAdd, ...logs].sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
     setLogs(updated);
     localStorage.setItem(STORAGE_KEYS.LOGS, JSON.stringify(updated));
     setShowLogReactionModal(false);
+    // Analyze the logged item (fires even for quick reactions that name a food).
+    void analyzeMealLog(logToAdd, profile?.allergies ?? [], language);
+  };
+
+  const runPatternAnalysis = async () => {
+    setPatternLoading(true);
+    setPatternError(null);
+    const result = await analyzePatterns(logs, profile?.allergies ?? [], language);
+    if (result.insight) {
+      setPatternInsight(result.insight);
+    } else {
+      setPatternError(result.error ?? 'other');
+    }
+    setPatternLoading(false);
   };
 
   const saveAllergies = (newAllergies: string[]) => {
@@ -1393,6 +1588,16 @@ export default function DashboardPage() {
                 <span className="font-semibold text-sm leading-tight">{t('reactions.logButton')}</span>
               </button>
             </div>
+
+            <AIInsightsPanel
+              insight={patternInsight}
+              loading={patternLoading}
+              error={patternError}
+              onRun={runPatternAnalysis}
+              canRun={logs.length > 0}
+              t={t}
+              language={language}
+            />
 
             <div className="hover-lift bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 p-5">
               <div className="flex items-center justify-between mb-3">

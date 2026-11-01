@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { COMMON_SYMPTOMS, MEAL_TYPES, MealLog, MealType, STORAGE_KEYS, UserProfile } from '../types';
 import { useLanguage } from '../components/LanguageProvider';
+import { analyzeMealLog } from '../lib/ai';
 
 const MAX_IMAGE_SIZE_MB = 1.5;
 
@@ -14,7 +15,7 @@ function getCurrentTime(): string {
 
 export default function LogPage() {
   const router = useRouter();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -86,6 +87,7 @@ export default function LogPage() {
       mealType: mealType || undefined,
       mealTime: mealTime || undefined,
       createdAt: new Date().toISOString(),
+      analysisStatus: 'pending',
     };
 
     const rawLogs = localStorage.getItem(STORAGE_KEYS.LOGS);
@@ -93,6 +95,9 @@ export default function LogPage() {
 
     try {
       localStorage.setItem(STORAGE_KEYS.LOGS, JSON.stringify([...existingLogs, newLog]));
+      // Fire-and-forget AI analysis; it writes back to localStorage when done.
+      // SPA navigation keeps the JS context alive, so the request survives the redirect.
+      void analyzeMealLog(newLog, profile?.allergies ?? [], language);
       router.replace('/dashboard');
     } catch {
       setSaving(false);
