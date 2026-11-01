@@ -18,7 +18,7 @@ import {
 import { useTheme } from '../components/ThemeProvider';
 import { useLanguage } from '../components/LanguageProvider';
 import { Language, TFunction } from '../i18n/translations';
-import { analyzePatterns, analyzeReactionLog } from '../lib/ai';
+import { analyzePatterns, analyzeReactionLog, askAI, buildLogSummary, ChatMessage } from '../lib/ai';
 
 const MAX_PHOTO_MB = 1.5;
 
@@ -906,6 +906,7 @@ function CompactMealCard({
   log,
   onEdit,
   onDelete,
+  onAsk,
   showDeleteConfirm,
   onConfirmDelete,
   onCancelDelete,
@@ -913,6 +914,7 @@ function CompactMealCard({
   log: MealLog;
   onEdit: () => void;
   onDelete: () => void;
+  onAsk: () => void;
   showDeleteConfirm: boolean;
   onConfirmDelete: () => void;
   onCancelDelete: () => void;
@@ -976,6 +978,14 @@ function CompactMealCard({
       {(log.analysis || log.analysisStatus === 'pending') && (
         <div className="px-4 pb-3">
           <MealAnalysisBadge log={log} />
+          {log.analysis && (
+            <button
+              onClick={onAsk}
+              className="press mt-2 ml-14 text-xs font-semibold text-green-600 dark:text-green-400 hover:underline"
+            >
+              💬 {t('ai.chat.button')}
+            </button>
+          )}
         </div>
       )}
       {showDeleteConfirm && (
@@ -1004,6 +1014,7 @@ function ReactionCard({
   log,
   onEdit,
   onDelete,
+  onAsk,
   showDeleteConfirm,
   onConfirmDelete,
   onCancelDelete,
@@ -1011,6 +1022,7 @@ function ReactionCard({
   log: MealLog;
   onEdit: () => void;
   onDelete: () => void;
+  onAsk: () => void;
   showDeleteConfirm: boolean;
   onConfirmDelete: () => void;
   onCancelDelete: () => void;
@@ -1090,6 +1102,14 @@ function ReactionCard({
       )}
       {(log.reactionAnalysis || log.reactionAnalysisStatus === 'pending') && (
         <ReactionAnalysisBadge log={log} />
+      )}
+      {log.reactionAnalysis && (
+        <button
+          onClick={onAsk}
+          className="press mt-2 ml-14 text-xs font-semibold text-green-600 dark:text-green-400 hover:underline"
+        >
+          💬 {t('ai.chat.button')}
+        </button>
       )}
       {showDeleteConfirm && (
         <div className="mt-3 flex gap-2 border-t border-gray-100 dark:border-gray-800 pt-2.5 animate-fade-slide-up">
@@ -1317,6 +1337,131 @@ function AIInsightsPanel({
   );
 }
 
+// ─── ChatSheet ──────────────────────────────────────────────────────────────
+
+function ChatSheet({ log, onClose }: { log: MealLog; onClose: () => void }) {
+  const { t, language } = useLanguage();
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<'missing_key' | 'other' | null>(null);
+  const summary = useMemo(() => buildLogSummary(log), [log]);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+  }, [messages, loading]);
+
+  const suggestions = log.hasReaction
+    ? [t('ai.chat.r1'), t('ai.chat.r2'), t('ai.chat.r3')]
+    : [t('ai.chat.m1'), t('ai.chat.m2'), t('ai.chat.m3')];
+
+  const send = async (text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed || loading) return;
+    const next: ChatMessage[] = [...messages, { role: 'user', content: trimmed }];
+    setMessages(next);
+    setInput('');
+    setLoading(true);
+    setError(null);
+    const res = await askAI(summary, next, language);
+    if (res.reply) {
+      setMessages([...next, { role: 'assistant', content: res.reply }]);
+    } else {
+      setError(res.error ?? 'other');
+    }
+    setLoading(false);
+  };
+
+  return (
+    <ModalSheet onClose={onClose}>
+      <div className="px-5 pb-6 flex flex-col" style={{ maxHeight: '82vh' }}>
+        <div className="flex items-center justify-between pb-2">
+          <div className="min-w-0">
+            <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-900 dark:text-gray-100">
+              <span>💬</span> {t('ai.chat.title')}
+            </h2>
+            <p className="text-xs text-gray-400 dark:text-gray-500 truncate">{log.mealName}</p>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400 text-xl leading-none flex-shrink-0"
+          >
+            ×
+          </button>
+        </div>
+
+        <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-3 py-2 min-h-[160px]">
+          {messages.length === 0 && !loading && (
+            <div className="space-y-2">
+              <p className="text-sm text-gray-400 dark:text-gray-500">{t('ai.chat.empty')}</p>
+              <div className="flex flex-wrap gap-2">
+                {suggestions.map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => send(s)}
+                    className="press text-xs text-left bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 px-3 py-1.5 rounded-full hover:border-green-400 dark:hover:border-green-600"
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {messages.map((m, i) => (
+            <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+              <div
+                className={`max-w-[85%] text-sm rounded-2xl px-3.5 py-2 whitespace-pre-wrap ${
+                  m.role === 'user'
+                    ? 'bg-green-500 text-white rounded-br-sm'
+                    : 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-bl-sm'
+                }`}
+              >
+                {m.content}
+              </div>
+            </div>
+          ))}
+
+          {loading && (
+            <div className="flex justify-start">
+              <div className="bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 text-sm rounded-2xl rounded-bl-sm px-3.5 py-2 animate-pulse">
+                …
+              </div>
+            </div>
+          )}
+
+          {error === 'missing_key' && <p className="text-sm text-amber-600 dark:text-amber-500">{t('ai.unavailable')}</p>}
+          {error === 'other' && <p className="text-sm text-red-500">{t('ai.chat.error')}</p>}
+        </div>
+
+        <div className="flex items-end gap-2 pt-2 border-t border-gray-100 dark:border-gray-800">
+          <textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                send(input);
+              }
+            }}
+            rows={1}
+            placeholder={t('ai.chat.placeholder')}
+            className="flex-1 resize-none px-3.5 py-2.5 rounded-2xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500"
+          />
+          <button
+            onClick={() => send(input)}
+            disabled={loading || !input.trim()}
+            className="cta-green press text-white font-semibold text-sm px-4 py-2.5 rounded-2xl disabled:opacity-40 flex-shrink-0"
+          >
+            {t('ai.chat.send')}
+          </button>
+        </div>
+      </div>
+    </ModalSheet>
+  );
+}
+
 // ─── DashboardPage ────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
@@ -1336,6 +1481,7 @@ export default function DashboardPage() {
   const [showAllergyModal, setShowAllergyModal] = useState(false);
   const [showLogReactionModal, setShowLogReactionModal] = useState(false);
 
+  const [chatLog, setChatLog] = useState<MealLog | null>(null);
   const [patternInsight, setPatternInsight] = useState<PatternInsight | null>(null);
   const [patternLoading, setPatternLoading] = useState(false);
   const [patternError, setPatternError] = useState<'missing_key' | 'other' | null>(null);
@@ -1493,6 +1639,8 @@ export default function DashboardPage() {
       {showLogReactionModal && (
         <LogReactionModal onSave={addLog} onClose={() => setShowLogReactionModal(false)} />
       )}
+
+      {chatLog && <ChatSheet log={chatLog} onClose={() => setChatLog(null)} />}
 
       {showAllergyModal && profile && (
         <EditAllergyModal
@@ -1807,6 +1955,7 @@ export default function DashboardPage() {
                       log={log}
                       onEdit={() => openMealEdit(log)}
                       onDelete={() => setDeleteId(log.id)}
+                      onAsk={() => setChatLog(log)}
                       showDeleteConfirm={deleteId === log.id}
                       onConfirmDelete={() => deleteLog(log.id)}
                       onCancelDelete={() => setDeleteId(null)}
@@ -1846,6 +1995,7 @@ export default function DashboardPage() {
                       log={log}
                       onEdit={() => openReactionEdit(log)}
                       onDelete={() => setDeleteId(log.id)}
+                      onAsk={() => setChatLog(log)}
                       showDeleteConfirm={deleteId === log.id}
                       onConfirmDelete={() => deleteLog(log.id)}
                       onCancelDelete={() => setDeleteId(null)}

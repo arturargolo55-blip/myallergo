@@ -88,6 +88,64 @@ export async function analyzeReactionLog(
   }
 }
 
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+/** Build a human-readable context summary of a log + its analysis for the chat system prompt. */
+export function buildLogSummary(log: MealLog): string {
+  const lines: string[] = [];
+  if (log.hasReaction) {
+    lines.push('Type: allergic reaction log.');
+    lines.push(`Context / what was eaten: ${log.mealName || '(not specified)'}`);
+    if (log.symptoms?.length) lines.push(`Symptoms: ${log.symptoms.join(', ')}`);
+    if (log.reactionIntensity) lines.push(`Reported intensity: ${log.reactionIntensity}`);
+    if (log.reactionNotes) lines.push(`Notes: ${log.reactionNotes}`);
+    const r = log.reactionAnalysis;
+    if (r) {
+      lines.push(`AI assessment: ${r.assessment}`);
+      if (r.possibleTriggers?.length) lines.push(`AI possible triggers: ${r.possibleTriggers.join(', ')}`);
+      lines.push(`AI urgency: ${r.urgency}; confidence: ${r.confidence}`);
+    }
+  } else {
+    lines.push('Type: meal log.');
+    lines.push(`Meal: ${log.mealName || '(unnamed)'}`);
+    if (log.description) lines.push(`Description: ${log.description}`);
+    const a = log.analysis;
+    if (a) {
+      if (typeof a.calories === 'number') lines.push(`AI estimated calories: ${a.calories} kcal`);
+      if (a.macros) lines.push(`AI macros (g): protein ${a.macros.protein_g}, carbs ${a.macros.carbs_g}, fat ${a.macros.fat_g}`);
+      if (a.allergens?.length) lines.push(`AI detected allergens: ${a.allergens.join(', ')}`);
+      if (a.ingredients?.length) lines.push(`AI inferred ingredients: ${a.ingredients.join(', ')}`);
+      lines.push(`AI confidence: ${a.confidence}`);
+    }
+  }
+  return lines.join('\n');
+}
+
+export async function askAI(
+  summary: string,
+  messages: ChatMessage[],
+  language: Language
+): Promise<{ reply?: string; error?: 'missing_key' | 'other' }> {
+  try {
+    const res = await fetch('/api/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ summary, messages, language }),
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      return { error: data?.error === 'missing_key' ? 'missing_key' : 'other' };
+    }
+    const data = (await res.json()) as { reply: string };
+    return { reply: data.reply };
+  } catch {
+    return { error: 'other' };
+  }
+}
+
 export interface PatternResult {
   insight?: PatternInsight;
   error?: 'missing_key' | 'other';
