@@ -1002,8 +1002,8 @@ function CompactMealCard({
 
 function ReactionCard({ log, onEdit }: { log: MealLog; onEdit: () => void }) {
   const { language, t } = useLanguage();
-  const mealTypeInfo = log.mealType ? MEAL_TYPES.find((tp) => tp.value === log.mealType) : null;
-  const icon = mealTypeInfo?.icon ?? '🍽️';
+  // Reactions always use the ⚡ icon, never a meal-type plate icon.
+  const icon = '⚡';
   const time = getMealTime(log);
   const locale = language === 'en' ? 'en-US' : 'pt-BR';
   const date = new Date(log.createdAt).toLocaleDateString(locale, {
@@ -1067,14 +1067,14 @@ function ReactionCard({ log, onEdit }: { log: MealLog; onEdit: () => void }) {
           {log.reactionNotes}
         </p>
       )}
-      {(log.analysis || log.analysisStatus === 'pending') && <MealAnalysisBadge log={log} />}
+      {(log.analysis || log.analysisStatus === 'pending') && <MealAnalysisBadge log={log} kind="reaction" />}
     </div>
   );
 }
 
 // ─── MealAnalysisBadge ──────────────────────────────────────────────────────
 
-function MealAnalysisBadge({ log }: { log: MealLog }) {
+function MealAnalysisBadge({ log, kind = 'meal' }: { log: MealLog; kind?: 'meal' | 'reaction' }) {
   const { t } = useLanguage();
 
   if (log.analysisStatus === 'pending') {
@@ -1087,6 +1087,25 @@ function MealAnalysisBadge({ log }: { log: MealLog }) {
 
   const a = log.analysis;
   if (!a) return null;
+
+  // Reactions are symptom events, not meals: no calories/macros. Surface only the
+  // allergens the AI detected in what was eaten, as possible triggers.
+  if (kind === 'reaction') {
+    if (!a.allergens?.length) return null;
+    return (
+      <div className="mt-2 ml-14 flex flex-wrap items-center gap-1.5">
+        <span className="text-[11px] text-gray-400 dark:text-gray-500">{t('ai.possibleTriggers')}:</span>
+        {a.allergens.map((al) => (
+          <span
+            key={al}
+            className="text-xs bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800 px-2 py-0.5 rounded-full"
+          >
+            ⚠️ {al}
+          </span>
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div className="mt-2 ml-14 space-y-1">
@@ -1369,12 +1388,16 @@ export default function DashboardPage() {
   };
 
   const reactionCount = logs.filter((l) => l.hasReaction).length;
+  const mealCount = logs.filter((l) => !l.hasReaction).length;
 
   const filteredLogs = useMemo(
     () =>
       selectedDay ? logs.filter((l) => isSameDay(new Date(l.createdAt), selectedDay)) : logs,
     [logs, selectedDay]
   );
+
+  // Meals tab shows meals only; reactions live in the Reactions tab.
+  const filteredMeals = useMemo(() => filteredLogs.filter((l) => !l.hasReaction), [filteredLogs]);
 
   const filteredReactions = useMemo(
     () => filteredLogs.filter((l) => l.hasReaction),
@@ -1554,8 +1577,8 @@ export default function DashboardPage() {
               <div className="relative">
                 <p className="text-sm font-medium text-white/80">{t('header.hello')} {profile.name.split(' ')[0]} 👋</p>
                 <h1 className="text-2xl font-extrabold tracking-tight mt-1">
-                  {todayLogs.length > 0
-                    ? `${todayLogs.length} ${t('stats.meals').toLowerCase()} · ${t('home.today').toLowerCase()}`
+                  {todayLogs.filter((l) => !l.hasReaction).length > 0
+                    ? `${todayLogs.filter((l) => !l.hasReaction).length} ${t('stats.meals').toLowerCase()} · ${t('home.today').toLowerCase()}`
                     : t('home.today')}
                 </h1>
               </div>
@@ -1568,7 +1591,7 @@ export default function DashboardPage() {
                 style={{ animationDelay: '0s' }}
               >
                 <div className="icon-tile w-16 h-16 mx-auto mb-2 bg-gradient-to-br from-emerald-400 to-green-600 text-4xl">🍽️</div>
-                <p className="text-3xl font-extrabold text-gray-900 dark:text-gray-100 leading-none">{logs.length}</p>
+                <p className="text-3xl font-extrabold text-gray-900 dark:text-gray-100 leading-none">{mealCount}</p>
                 <p className="text-xs font-medium text-gray-500 dark:text-gray-400 mt-1.5">{t('stats.meals')}</p>
               </button>
               <button
@@ -1673,7 +1696,7 @@ export default function DashboardPage() {
                         style={{ animationDelay: `${index * 0.04}s` }}
                       >
                         <span className="icon-tile w-12 h-12 bg-gray-100 dark:bg-gray-800 text-2xl flex-shrink-0 shadow-none">
-                          {mealTypeInfo?.icon ?? '🍽️'}
+                          {log.hasReaction ? '⚡' : (mealTypeInfo?.icon ?? '🍽️')}
                         </span>
                         <span className="flex-1 text-sm font-medium text-gray-700 dark:text-gray-300 truncate">
                           {log.mealName}
@@ -1700,7 +1723,7 @@ export default function DashboardPage() {
           <div className="space-y-4 animate-tab">
             <DaySelector weekDays={weekDays} selectedDay={selectedDay} onChange={setSelectedDay} />
 
-            {filteredLogs.length === 0 ? (
+            {filteredMeals.length === 0 ? (
               <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 p-10 text-center animate-pop-in">
                 <div className="icon-tile w-20 h-20 mx-auto mb-4 bg-gradient-to-br from-emerald-100 to-green-200 dark:from-emerald-950 dark:to-green-900 text-4xl animate-float">🍽️</div>
                 <p className="text-gray-600 dark:text-gray-400 font-medium text-sm">
@@ -1709,7 +1732,7 @@ export default function DashboardPage() {
               </div>
             ) : (
               <div className="space-y-2">
-                {filteredLogs.map((log, index) => (
+                {filteredMeals.map((log, index) => (
                   <div
                     key={log.id}
                     className="animate-fade-slide-up"
