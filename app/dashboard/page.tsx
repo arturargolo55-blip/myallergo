@@ -18,7 +18,7 @@ import {
 import { useTheme } from '../components/ThemeProvider';
 import { useLanguage } from '../components/LanguageProvider';
 import { Language, TFunction } from '../i18n/translations';
-import { analyzeMealLog, analyzePatterns } from '../lib/ai';
+import { analyzePatterns, analyzeReactionLog } from '../lib/ai';
 
 const MAX_PHOTO_MB = 1.5;
 
@@ -1088,7 +1088,9 @@ function ReactionCard({
           {log.reactionNotes}
         </p>
       )}
-      {(log.analysis || log.analysisStatus === 'pending') && <MealAnalysisBadge log={log} kind="reaction" />}
+      {(log.reactionAnalysis || log.reactionAnalysisStatus === 'pending') && (
+        <ReactionAnalysisBadge log={log} />
+      )}
       {showDeleteConfirm && (
         <div className="mt-3 flex gap-2 border-t border-gray-100 dark:border-gray-800 pt-2.5 animate-fade-slide-up">
           <button
@@ -1111,7 +1113,7 @@ function ReactionCard({
 
 // ─── MealAnalysisBadge ──────────────────────────────────────────────────────
 
-function MealAnalysisBadge({ log, kind = 'meal' }: { log: MealLog; kind?: 'meal' | 'reaction' }) {
+function MealAnalysisBadge({ log }: { log: MealLog }) {
   const { t } = useLanguage();
 
   if (log.analysisStatus === 'pending') {
@@ -1124,25 +1126,6 @@ function MealAnalysisBadge({ log, kind = 'meal' }: { log: MealLog; kind?: 'meal'
 
   const a = log.analysis;
   if (!a) return null;
-
-  // Reactions are symptom events, not meals: no calories/macros. Surface only the
-  // allergens the AI detected in what was eaten, as possible triggers.
-  if (kind === 'reaction') {
-    if (!a.allergens?.length) return null;
-    return (
-      <div className="mt-2 ml-14 flex flex-wrap items-center gap-1.5">
-        <span className="text-[11px] text-gray-400 dark:text-gray-500">{t('ai.possibleTriggers')}:</span>
-        {a.allergens.map((al) => (
-          <span
-            key={al}
-            className="text-xs bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800 px-2 py-0.5 rounded-full"
-          >
-            ⚠️ {al}
-          </span>
-        ))}
-      </div>
-    );
-  }
 
   return (
     <div className="mt-2 ml-14 space-y-1">
@@ -1171,6 +1154,48 @@ function MealAnalysisBadge({ log, kind = 'meal' }: { log: MealLog; kind?: 'meal'
         ))}
       </div>
       <p className="text-[11px] text-gray-400 dark:text-gray-500 italic">{t('ai.mealDisclaimer')}</p>
+    </div>
+  );
+}
+
+// ─── ReactionAnalysisBadge ──────────────────────────────────────────────────
+
+function ReactionAnalysisBadge({ log }: { log: MealLog }) {
+  const { t } = useLanguage();
+
+  if (log.reactionAnalysisStatus === 'pending') {
+    return (
+      <p className="mt-2 ml-14 text-xs text-gray-400 dark:text-gray-500 animate-pulse">
+        ✨ {t('ai.analyzing')}
+      </p>
+    );
+  }
+
+  const a = log.reactionAnalysis;
+  if (!a) return null;
+
+  return (
+    <div className="mt-2 ml-14 space-y-1.5">
+      {a.urgency === 'seek_care' && (
+        <p className="text-xs font-semibold text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-lg px-2 py-1">
+          🚨 {t('ai.reaction.seekCare')}
+        </p>
+      )}
+      <p className="text-xs text-gray-600 dark:text-gray-300">🧠 {a.assessment}</p>
+      {a.possibleTriggers?.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-[11px] text-gray-400 dark:text-gray-500">{t('ai.possibleTriggers')}:</span>
+          {a.possibleTriggers.map((tr) => (
+            <span
+              key={tr}
+              className="text-xs bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800 px-2 py-0.5 rounded-full"
+            >
+              ⚠️ {tr}
+            </span>
+          ))}
+        </div>
+      )}
+      <p className="text-[11px] text-gray-400 dark:text-gray-500 italic">{t('ai.reactionDisclaimer')}</p>
     </div>
   );
 }
@@ -1345,7 +1370,10 @@ export default function DashboardPage() {
 
   // While any meal analysis is in flight (written from the /log page or the quick-reaction
   // modal), re-read localStorage until it lands so the cards update in place.
-  const hasPending = useMemo(() => logs.some((l) => l.analysisStatus === 'pending'), [logs]);
+  const hasPending = useMemo(
+    () => logs.some((l) => l.analysisStatus === 'pending' || l.reactionAnalysisStatus === 'pending'),
+    [logs]
+  );
   useEffect(() => {
     if (!hasPending) return;
     const id = setInterval(() => {
@@ -1378,15 +1406,15 @@ export default function DashboardPage() {
   };
 
   const addLog = (newLog: MealLog) => {
-    const logToAdd: MealLog = { ...newLog, analysisStatus: 'pending' };
+    // Entries from this modal are always reactions → run the reaction analyzer.
+    const logToAdd: MealLog = { ...newLog, reactionAnalysisStatus: 'pending' };
     const updated = [logToAdd, ...logs].sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
     setLogs(updated);
     localStorage.setItem(STORAGE_KEYS.LOGS, JSON.stringify(updated));
     setShowLogReactionModal(false);
-    // Analyze the logged item (fires even for quick reactions that name a food).
-    void analyzeMealLog(logToAdd, profile?.allergies ?? [], language);
+    void analyzeReactionLog(logToAdd, profile?.allergies ?? [], language);
   };
 
   const runPatternAnalysis = async () => {

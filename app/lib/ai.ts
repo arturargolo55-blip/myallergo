@@ -1,4 +1,4 @@
-import { MealAnalysis, MealLog, PatternInsight, STORAGE_KEYS } from '../types';
+import { MealAnalysis, MealLog, PatternInsight, ReactionAnalysis, STORAGE_KEYS } from '../types';
 import { Language } from '../i18n/translations';
 
 function readLogs(): MealLog[] {
@@ -51,6 +51,43 @@ export async function analyzeMealLog(
   }
 }
 
+/**
+ * Fire-and-forget reaction analysis — the reaction-specific counterpart to
+ * analyzeMealLog. Reads symptoms/intensity/context and persists an assessment,
+ * likely triggers, and an urgency flag.
+ */
+export async function analyzeReactionLog(
+  log: MealLog,
+  knownAllergies: string[],
+  language: Language
+): Promise<ReactionAnalysis | null> {
+  patchLog(log.id, { reactionAnalysisStatus: 'pending' });
+  try {
+    const res = await fetch('/api/analyze-reaction', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        context: log.mealName,
+        symptoms: log.symptoms,
+        intensity: log.reactionIntensity,
+        notes: log.reactionNotes,
+        knownAllergies,
+        language,
+      }),
+    });
+    if (!res.ok) {
+      patchLog(log.id, { reactionAnalysisStatus: 'error' });
+      return null;
+    }
+    const reactionAnalysis = (await res.json()) as ReactionAnalysis;
+    patchLog(log.id, { reactionAnalysis, reactionAnalysisStatus: 'done' });
+    return reactionAnalysis;
+  } catch {
+    patchLog(log.id, { reactionAnalysisStatus: 'error' });
+    return null;
+  }
+}
+
 export interface PatternResult {
   insight?: PatternInsight;
   error?: 'missing_key' | 'other';
@@ -68,7 +105,7 @@ export async function analyzePatterns(
     symptoms: l.symptoms?.length ? l.symptoms : undefined,
     intensity: l.reactionIntensity,
     notes: l.reactionNotes,
-    allergens: l.analysis?.allergens,
+    allergens: l.analysis?.allergens ?? l.reactionAnalysis?.possibleTriggers,
     ingredients: l.analysis?.ingredients,
   }));
 

@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { COMMON_SYMPTOMS, MEAL_TYPES, MealLog, MealType, STORAGE_KEYS, UserProfile } from '../types';
 import { useLanguage } from '../components/LanguageProvider';
-import { analyzeMealLog } from '../lib/ai';
+import { analyzeMealLog, analyzeReactionLog } from '../lib/ai';
 
 const MAX_IMAGE_SIZE_MB = 1.5;
 
@@ -87,7 +87,8 @@ export default function LogPage() {
       mealType: mealType || undefined,
       mealTime: mealTime || undefined,
       createdAt: new Date().toISOString(),
-      analysisStatus: 'pending',
+      // A meal flagged with a reaction is analyzed as a reaction; otherwise as a meal.
+      ...(hasReaction ? { reactionAnalysisStatus: 'pending' as const } : { analysisStatus: 'pending' as const }),
     };
 
     const rawLogs = localStorage.getItem(STORAGE_KEYS.LOGS);
@@ -97,7 +98,11 @@ export default function LogPage() {
       localStorage.setItem(STORAGE_KEYS.LOGS, JSON.stringify([...existingLogs, newLog]));
       // Fire-and-forget AI analysis; it writes back to localStorage when done.
       // SPA navigation keeps the JS context alive, so the request survives the redirect.
-      void analyzeMealLog(newLog, profile?.allergies ?? [], language);
+      if (hasReaction) {
+        void analyzeReactionLog(newLog, profile?.allergies ?? [], language);
+      } else {
+        void analyzeMealLog(newLog, profile?.allergies ?? [], language);
+      }
       router.replace('/dashboard');
     } catch {
       setSaving(false);

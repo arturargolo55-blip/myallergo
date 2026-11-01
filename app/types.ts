@@ -52,6 +52,16 @@ export interface MealAnalysis {
   analyzedAt: string;
 }
 
+export type ReactionUrgency = 'routine' | 'monitor' | 'seek_care';
+
+export interface ReactionAnalysis {
+  assessment: string;
+  possibleTriggers: string[];
+  urgency: ReactionUrgency;
+  confidence: 'low' | 'medium' | 'high';
+  analyzedAt: string;
+}
+
 export interface MealLog {
   id: string;
   description: string;
@@ -66,6 +76,8 @@ export interface MealLog {
   createdAt: string;
   analysis?: MealAnalysis;
   analysisStatus?: AnalysisStatus;
+  reactionAnalysis?: ReactionAnalysis;
+  reactionAnalysisStatus?: AnalysisStatus;
 }
 
 export type Likelihood = 'low' | 'medium' | 'high';
