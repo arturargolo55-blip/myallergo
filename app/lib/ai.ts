@@ -1,6 +1,87 @@
 import { MealAnalysis, MealLog, PatternInsight, ReactionAnalysis, STORAGE_KEYS } from '../types';
 import { Language } from '../i18n/translations';
 
+// ─── Daily usage limit ──────────────────────────────────────────────────────
+// Soft, client-side guard to avoid accidental cost blowups on one device.
+// TODO(auth): replace with a real server-side limit tied to user accounts once the
+// login step exists. This is NOT a security control — it can be bypassed trivially.
+export const DAILY_ANALYSIS_LIMIT = 30;
+
+function todayKey(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+export function getUsageToday(): number {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEYS.USAGE);
+    if (!raw) return 0;
+    const rec = JSON.parse(raw) as { date: string; count: number };
+    return rec.date === todayKey() ? rec.count : 0;
+  } catch {
+    return 0;
+  }
+}
+
+export function analysesRemaining(): number {
+  return Math.max(0, DAILY_ANALYSIS_LIMIT - getUsageToday());
+}
+
+function incrementUsage() {
+  try {
+    const count = getUsageToday() + 1;
+    localStorage.setItem(STORAGE_KEYS.USAGE, JSON.stringify({ date: todayKey(), count }));
+  } catch {
+    /* ignore quota errors */
+  }
+}
+
+export type AnalyzeError = 'missing_key' | 'limit' | 'invalid' | 'timeout' | 'other';
+
+export interface AnalyzeResult {
+  analysis?: MealAnalysis;
+  error?: AnalyzeError;
+}
+
+/**
+ * Synchronous (awaited) meal analysis for the inline Review-before-Save flow.
+ * Does NOT touch localStorage — the log isn't saved yet; the caller shows the result
+ * in an editable review and persists the corrected version.
+ */
+export async function analyzeMealInline(params: {
+  mealName: string;
+  description?: string;
+  photoDataUrl?: string;
+  knownAllergies: string[]; // canonical IDs
+  language: Language;
+}): Promise<AnalyzeResult> {
+  if (analysesRemaining() <= 0) return { error: 'limit' };
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 35000);
+  try {
+    incrementUsage(); // count the attempt (we're about to spend an API call)
+    const res = await fetch('/api/analyze-meal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+      signal: controller.signal,
+    });
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      if (data?.error === 'missing_key') return { error: 'missing_key' };
+      if (data?.error === 'invalid_output') return { error: 'invalid' };
+      return { error: 'other' };
+    }
+    const analysis = (await res.json()) as MealAnalysis;
+    return { analysis };
+  } catch (e) {
+    if (e instanceof DOMException && e.name === 'AbortError') return { error: 'timeout' };
+    return { error: 'other' };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function readLogs(): MealLog[] {
   const raw = localStorage.getItem(STORAGE_KEYS.LOGS);
   return raw ? (JSON.parse(raw) as MealLog[]) : [];
@@ -93,6 +174,18 @@ export interface ChatMessage {
   content: string;
 }
 
+/** Allergen identifiers from an analysis, tolerating both v2 and legacy v1 shapes. */
+export function analysisAllergenIds(a: MealAnalysis): string[] {
+  if (a.detectedAllergens?.length) return [...new Set(a.detectedAllergens.map((m) => m.allergenId))];
+  return a.allergens ?? []; // legacy v1
+}
+
+/** Ingredient names from an analysis, tolerating both v2 (objects) and legacy v1 (strings). */
+export function analysisIngredientNames(a: MealAnalysis): string[] {
+  const raw = (a.ingredients ?? []) as Array<string | { name: string }>;
+  return raw.map((i) => (typeof i === 'string' ? i : i.name)).filter(Boolean);
+}
+
 /** Build a human-readable context summary of a log + its analysis for the chat system prompt. */
 export function buildLogSummary(log: MealLog): string {
   const lines: string[] = [];
@@ -116,9 +209,11 @@ export function buildLogSummary(log: MealLog): string {
     if (a) {
       if (typeof a.calories === 'number') lines.push(`AI estimated calories: ${a.calories} kcal`);
       if (a.macros) lines.push(`AI macros (g): protein ${a.macros.protein_g}, carbs ${a.macros.carbs_g}, fat ${a.macros.fat_g}`);
-      if (a.allergens?.length) lines.push(`AI detected allergens: ${a.allergens.join(', ')}`);
-      if (a.ingredients?.length) lines.push(`AI inferred ingredients: ${a.ingredients.join(', ')}`);
-      lines.push(`AI confidence: ${a.confidence}`);
+      const allergenIds = analysisAllergenIds(a);
+      if (allergenIds.length) lines.push(`Detected allergens (code-checked): ${allergenIds.join(', ')}`);
+      const ings = analysisIngredientNames(a);
+      if (ings.length) lines.push(`Ingredients: ${ings.join(', ')}`);
+      if (a.riskLevel) lines.push(`Risk level: ${a.riskLevel}`);
     }
   }
   return lines.join('\n');
@@ -171,8 +266,8 @@ export async function analyzePatterns(
     symptoms: l.symptoms?.length ? l.symptoms : undefined,
     intensity: l.reactionIntensity,
     notes: l.reactionNotes,
-    allergens: l.analysis?.allergens ?? l.reactionAnalysis?.possibleTriggers,
-    ingredients: l.analysis?.ingredients,
+    allergens: l.analysis ? analysisAllergenIds(l.analysis) : l.reactionAnalysis?.possibleTriggers,
+    ingredients: l.analysis ? analysisIngredientNames(l.analysis) : undefined,
   }));
 
   try {

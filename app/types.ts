@@ -43,13 +43,50 @@ export interface MealMacros {
   fat_g: number;
 }
 
+/** Per-ingredient confidence: read off a label, inferred-likely, or a guess. */
+export type IngredientConfidence = 'label' | 'likely' | 'uncertain';
+
+export interface AnalyzedIngredient {
+  name: string;
+  confidence: IngredientConfidence;
+}
+
+/** A code-generated allergen hit (produced by lib/allergens.ts, NOT by the model). */
+export interface AllergenMatch {
+  allergenId: string;
+  matchedTerm: string;
+  ingredient: string;
+  strength: 'match' | 'possible';
+}
+
+export type AnalysisSourceType = 'label' | 'plate' | 'text';
+export type RiskLevel = 'none_detected' | 'possible' | 'detected';
+
 export interface MealAnalysis {
+  /** Whether the photo/input was a packaged-food label, a plate of food, or text only. */
+  sourceType: AnalysisSourceType;
+  ingredients?: AnalyzedIngredient[];
   calories?: number;
   macros?: MealMacros;
-  allergens: string[];
-  ingredients?: string[];
-  confidence: 'low' | 'medium' | 'high';
+  /** Plate photos / text give estimates; labels give per-serving facts. */
+  macrosAreEstimate: boolean;
+  /** "may contain traces of…" statements (label mode), flagged separately. */
+  traces?: string[];
+  /** Generic model suggestions of allergens that MIGHT hide here — shown as suggestions only. */
+  possibleHiddenAllergens?: string[];
+  /** Model's clarifying question (user's language) when an uncertain ingredient could hide an allergen. */
+  clarifyingQuestion?: string;
+  /** Code-generated allergen warnings cross-checked against the user's allergy IDs. */
+  detectedAllergens: AllergenMatch[];
+  riskLevel: RiskLevel;
+  /** True when the user corrected ingredients/allergens/macros before saving. */
+  userEdited: boolean;
   analyzedAt: string;
+
+  /** @deprecated v1 fields kept so older logs still render. */
+  allergens?: string[];
+  /** @deprecated v1 overall confidence. */
+  confidence?: 'low' | 'medium' | 'high';
 }
 
 export type ReactionUrgency = 'routine' | 'monitor' | 'seek_care';
@@ -124,4 +161,5 @@ export const STORAGE_KEYS = {
   PROFILE: 'allergy-tracker-profile',
   LOGS: 'allergy-tracker-logs',
   AI_INSIGHTS: 'allergy-tracker-ai-insights',
+  USAGE: 'allergy-tracker-ai-usage',
 } as const;

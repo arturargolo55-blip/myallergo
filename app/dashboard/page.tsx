@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  COMMON_ALLERGIES,
   COMMON_SYMPTOMS,
   Likelihood,
   MealAnalysis,
@@ -14,6 +13,7 @@ import {
   PatternInsight,
   REACTION_INTENSITIES,
   ReactionIntensity,
+  RiskLevel,
   STORAGE_KEYS,
   UserProfile,
 } from '../types';
@@ -21,6 +21,12 @@ import { useTheme } from '../components/ThemeProvider';
 import { useLanguage } from '../components/LanguageProvider';
 import { Language, TFunction } from '../i18n/translations';
 import { analyzePatterns, analyzeReactionLog, askAI, buildLogSummary, ChatMessage } from '../lib/ai';
+import { ALLERGENS, CUSTOM_PREFIX, migrateAllergies, needsMigration } from '../lib/allergens';
+
+/** Localized allergen label: canonical IDs via i18n, custom entries as their text. */
+function allergenLabel(id: string, t: TFunction): string {
+  return id.startsWith(CUSTOM_PREFIX) ? id.slice(CUSTOM_PREFIX.length) : t('allergen.' + id);
+}
 
 const MAX_PHOTO_MB = 1.5;
 
@@ -132,15 +138,17 @@ function EditAllergyModal({
   const [selected, setSelected] = useState<string[]>(profile.allergies);
   const [customInput, setCustomInput] = useState('');
 
-  const customList = selected.filter((a) => !COMMON_ALLERGIES.includes(a));
+  const customList = selected.filter((a) => a.startsWith(CUSTOM_PREFIX));
 
   const toggle = (a: string) =>
     setSelected((prev) => (prev.includes(a) ? prev.filter((x) => x !== a) : [...prev, a]));
 
   const addCustom = () => {
     const trimmed = customInput.trim();
-    if (!trimmed || selected.includes(trimmed)) return;
-    setSelected((prev) => [...prev, trimmed]);
+    if (!trimmed) return;
+    const entry = `${CUSTOM_PREFIX}${trimmed}`;
+    if (selected.includes(entry)) return;
+    setSelected((prev) => [...prev, entry]);
     setCustomInput('');
   };
 
@@ -162,12 +170,12 @@ function EditAllergyModal({
         </div>
 
         <div className="grid grid-cols-2 gap-2">
-          {COMMON_ALLERGIES.map((allergy) => {
-            const isSelected = selected.includes(allergy);
+          {ALLERGENS.map((allergen) => {
+            const isSelected = selected.includes(allergen.id);
             return (
               <button
-                key={allergy}
-                onClick={() => toggle(allergy)}
+                key={allergen.id}
+                onClick={() => toggle(allergen.id)}
                 className={`flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm font-medium text-left transition-colors ${
                   isSelected
                     ? 'bg-green-50 dark:bg-green-950 border-green-500 dark:border-green-600 text-green-700 dark:text-green-300'
@@ -183,7 +191,8 @@ function EditAllergyModal({
                 >
                   {isSelected && '✓'}
                 </span>
-                {t('allergy.' + allergy)}
+                <span className="flex-shrink-0">{allergen.emoji}</span>
+                {t('allergen.' + allergen.id)}
               </button>
             );
           })}
@@ -196,7 +205,7 @@ function EditAllergyModal({
                 key={a}
                 className="flex items-center gap-1 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-300 text-xs font-medium px-2.5 py-1 rounded-full"
               >
-                {a}
+                {allergenLabel(a, t)}
                 <button
                   onClick={() => removeCustom(a)}
                   className="hover:text-red-500 ml-0.5 leading-none"
@@ -1135,6 +1144,12 @@ function ReactionCard({
 
 // ─── MealAnalysisBadge ──────────────────────────────────────────────────────
 
+const RISK_STYLES: Record<RiskLevel, string> = {
+  detected: 'bg-red-50 dark:bg-red-950 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800',
+  possible: 'bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-800',
+  none_detected: 'bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700',
+};
+
 function MealAnalysisBadge({ log }: { log: MealLog }) {
   const { t } = useLanguage();
 
@@ -1149,33 +1164,49 @@ function MealAnalysisBadge({ log }: { log: MealLog }) {
   const a = log.analysis;
   if (!a) return null;
 
+  // v2 (code-driven risk) vs v1 (legacy `allergens`/`confidence`) back-compat.
+  const isV2 = a.riskLevel !== undefined;
+  const detectedIds = a.detectedAllergens ? [...new Set(a.detectedAllergens.map((m) => m.allergenId))] : [];
+
   return (
     <div className="mt-2 ml-14 space-y-1">
       <div className="flex flex-wrap items-center gap-1.5">
-        {typeof a.calories === 'number' && (
-          <span className="text-xs font-medium text-gray-600 dark:text-gray-300">
-            🔥 {a.calories} {t('ai.kcal')}
+        {isV2 && a.riskLevel && (
+          <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border ${RISK_STYLES[a.riskLevel]}`}>
+            {t('risk.' + a.riskLevel)}
           </span>
+        )}
+        {typeof a.calories === 'number' && (
+          <span className="text-xs font-medium text-gray-600 dark:text-gray-300">🔥 {a.calories} {t('ai.kcal')}</span>
         )}
         {a.macros && (
           <span className="text-xs text-gray-400 dark:text-gray-500">
             · P {Math.round(a.macros.protein_g)}{t('ai.gram')} · C {Math.round(a.macros.carbs_g)}{t('ai.gram')} · G{' '}
             {Math.round(a.macros.fat_g)}{t('ai.gram')}
+            {a.macrosAreEstimate && <> · {t('review.estimate')}</>}
           </span>
         )}
-        <span className="text-[11px] text-gray-400 dark:text-gray-500">
-          · {t('ai.confidence')}: {t('ai.confidence.' + a.confidence)}
-        </span>
-        {a.allergens?.map((al) => (
-          <span
-            key={al}
-            className="text-xs bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800 px-2 py-0.5 rounded-full"
-          >
-            ⚠️ {al}
-          </span>
-        ))}
       </div>
-      <p className="text-[11px] text-gray-400 dark:text-gray-500 italic">{t('ai.mealDisclaimer')}</p>
+
+      {/* Detected allergens */}
+      {(isV2 ? detectedIds.length > 0 : (a.allergens?.length ?? 0) > 0) && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          {(isV2 ? detectedIds : a.allergens ?? []).map((al) => (
+            <span
+              key={al}
+              className="text-xs bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-400 border border-amber-200 dark:border-amber-800 px-2 py-0.5 rounded-full"
+            >
+              ⚠️ {isV2 ? allergenLabel(al, t) : al}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {isV2 && a.riskLevel === 'none_detected' && detectedIds.length === 0 && (
+        <p className="text-[11px] text-gray-400 dark:text-gray-500">{t('risk.none_detected.note')}</p>
+      )}
+
+      <p className="text-[11px] text-gray-400 dark:text-gray-500 italic">{t('ai.hiddenNote')}</p>
     </div>
   );
 }
@@ -1510,7 +1541,13 @@ export default function DashboardPage() {
       router.replace('/onboarding');
       return;
     }
-    setProfile(JSON.parse(raw));
+    const loaded: UserProfile = JSON.parse(raw);
+    // Transparently migrate old PT-label allergies to canonical IDs.
+    if (needsMigration(loaded.allergies)) {
+      loaded.allergies = migrateAllergies(loaded.allergies);
+      localStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify(loaded));
+    }
+    setProfile(loaded);
 
     const rawLogs = localStorage.getItem(STORAGE_KEYS.LOGS);
     if (rawLogs) {
@@ -1600,7 +1637,14 @@ export default function DashboardPage() {
     const updated = logs.map((l) => {
       if (l.id !== id) return l;
       if (update.mealUpdate) {
-        const base: MealAnalysis = l.analysis ?? { allergens: [], confidence: 'medium', analyzedAt: now };
+        const base: MealAnalysis = l.analysis ?? {
+          sourceType: 'text',
+          macrosAreEstimate: true,
+          detectedAllergens: [],
+          riskLevel: 'none_detected',
+          userEdited: false,
+          analyzedAt: now,
+        };
         return { ...l, analysis: { ...base, ...update.mealUpdate, analyzedAt: now }, analysisStatus: 'done' as const };
       }
       if (update.reactionUpdate) {
@@ -1932,7 +1976,7 @@ export default function DashboardPage() {
                       onClick={() => setShowAllergyModal(true)}
                       className="press bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 text-sm font-medium px-3 py-1.5 rounded-full hover:bg-amber-100 dark:hover:bg-amber-900"
                     >
-                      ⚠️ {t('allergy.' + a)}
+                      ⚠️ {allergenLabel(a, t)}
                     </button>
                   ))}
                 </div>

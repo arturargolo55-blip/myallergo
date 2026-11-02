@@ -180,6 +180,66 @@ const pt = {
   'ai.insights.noSuspects': 'Nenhum padrão claro identificado ainda.',
   'ai.insights.lowData': 'Poucas reações registradas — resultados preliminares. Registre mais para aumentar a confiança.',
   'ai.insights.updatedAt': 'Atualizado em {when}',
+
+  // ── Allergen display names (canonical IDs) ──
+  'allergen.gluten': 'Glúten',
+  'allergen.crustaceans': 'Crustáceos',
+  'allergen.egg': 'Ovos',
+  'allergen.fish': 'Peixe',
+  'allergen.peanut': 'Amendoim',
+  'allergen.soy': 'Soja',
+  'allergen.milk': 'Leite / Lactose',
+  'allergen.tree_nuts': 'Nozes e castanhas',
+  'allergen.celery': 'Aipo',
+  'allergen.mustard': 'Mostarda',
+  'allergen.sesame': 'Gergelim',
+  'allergen.sulphites': 'Sulfitos',
+  'allergen.lupin': 'Tremoço',
+  'allergen.molluscs': 'Moluscos',
+  'allergen.corn': 'Milho',
+
+  // ── Risk levels + per-ingredient confidence ──
+  'risk.detected': 'Alérgeno detectado',
+  'risk.possible': 'Possível alérgeno',
+  'risk.none_detected': 'Nenhum alérgeno detectado',
+  'risk.none_detected.note': 'Nenhum alérgeno conhecido detectado nos ingredientes listados.',
+  'conf.label': 'rótulo',
+  'conf.likely': 'provável',
+  'conf.uncertain': 'incerto',
+
+  // ── Analysis / limits / errors ──
+  'ai.hiddenNote': 'Fotos não revelam ingredientes ocultos. Confira sempre o rótulo.',
+  'ai.limitReached': 'Limite diário de análises atingido. Tente novamente amanhã.',
+  'ai.timeout': 'A análise demorou demais. Tente novamente.',
+  'ai.analyzeError': 'Não foi possível analisar agora. Tente novamente.',
+
+  // ── Inline review before saving ──
+  'review.title': 'Revisar análise',
+  'review.source.label': 'Rótulo de produto',
+  'review.source.plate': 'Prato de comida',
+  'review.source.text': 'A partir do texto',
+  'review.detected': 'Alérgenos detectados (verificados pelo app)',
+  'review.noAllergens': 'Nenhum dos seus alérgenos foi encontrado nos ingredientes.',
+  'review.ingredients': 'Ingredientes',
+  'review.addIngredient': 'Adicionar ingrediente…',
+  'review.traces': 'Pode conter traços de',
+  'review.suggestions': 'Sugestões da IA',
+  'review.suggestionsNote': 'Possíveis alérgenos ocultos — apenas sugestões, não confirmações.',
+  'review.macros': 'Calorias e macros',
+  'review.estimate': 'estimativa',
+  'review.kcal': 'kcal',
+  'review.protein': 'Proteína',
+  'review.carbs': 'Carbo.',
+  'review.fat': 'Gordura',
+  'review.answerPlaceholder': 'Sua resposta…',
+  'review.rerun': 'Analisar de novo',
+  'review.saveWithout': 'Salvar assim',
+  'review.confirmSave': 'Confirmar e salvar',
+
+  // ── Log page buttons ──
+  'log.analyzeReview': 'Analisar com IA',
+  'log.saveWithout': 'Salvar sem análise',
+  'log.photoHint': 'A foto é reduzida e comprimida automaticamente.',
 };
 
 const en: typeof pt = {
@@ -362,6 +422,66 @@ const en: typeof pt = {
   'ai.insights.noSuspects': 'No clear pattern identified yet.',
   'ai.insights.lowData': 'Few reactions logged — preliminary results. Log more to increase confidence.',
   'ai.insights.updatedAt': 'Updated {when}',
+
+  // ── Allergen display names (canonical IDs) ──
+  'allergen.gluten': 'Gluten',
+  'allergen.crustaceans': 'Crustaceans',
+  'allergen.egg': 'Eggs',
+  'allergen.fish': 'Fish',
+  'allergen.peanut': 'Peanut',
+  'allergen.soy': 'Soy',
+  'allergen.milk': 'Milk / Lactose',
+  'allergen.tree_nuts': 'Tree nuts',
+  'allergen.celery': 'Celery',
+  'allergen.mustard': 'Mustard',
+  'allergen.sesame': 'Sesame',
+  'allergen.sulphites': 'Sulphites',
+  'allergen.lupin': 'Lupin',
+  'allergen.molluscs': 'Molluscs',
+  'allergen.corn': 'Corn',
+
+  // ── Risk levels + per-ingredient confidence ──
+  'risk.detected': 'Allergen detected',
+  'risk.possible': 'Possible allergen',
+  'risk.none_detected': 'No allergen detected',
+  'risk.none_detected.note': 'No known allergen detected in the listed ingredients.',
+  'conf.label': 'label',
+  'conf.likely': 'likely',
+  'conf.uncertain': 'uncertain',
+
+  // ── Analysis / limits / errors ──
+  'ai.hiddenNote': 'Photos cannot reveal hidden ingredients. Always check the label.',
+  'ai.limitReached': 'Daily analysis limit reached. Please try again tomorrow.',
+  'ai.timeout': 'The analysis took too long. Please try again.',
+  'ai.analyzeError': 'Could not analyze right now. Please try again.',
+
+  // ── Inline review before saving ──
+  'review.title': 'Review analysis',
+  'review.source.label': 'Product label',
+  'review.source.plate': 'Plate of food',
+  'review.source.text': 'From text',
+  'review.detected': 'Detected allergens (checked by the app)',
+  'review.noAllergens': 'None of your allergens were found in the ingredients.',
+  'review.ingredients': 'Ingredients',
+  'review.addIngredient': 'Add ingredient…',
+  'review.traces': 'May contain traces of',
+  'review.suggestions': 'AI suggestions',
+  'review.suggestionsNote': 'Possible hidden allergens — suggestions only, not confirmations.',
+  'review.macros': 'Calories and macros',
+  'review.estimate': 'estimate',
+  'review.kcal': 'kcal',
+  'review.protein': 'Protein',
+  'review.carbs': 'Carbs',
+  'review.fat': 'Fat',
+  'review.answerPlaceholder': 'Your answer…',
+  'review.rerun': 'Re-analyze',
+  'review.saveWithout': 'Save as is',
+  'review.confirmSave': 'Confirm and save',
+
+  // ── Log page buttons ──
+  'log.analyzeReview': 'Analyze with AI',
+  'log.saveWithout': 'Save without analysis',
+  'log.photoHint': 'The photo is automatically downscaled and compressed.',
 };
 
 export const translations: Record<Language, typeof pt> = { pt, en };

@@ -2,14 +2,15 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { COMMON_ALLERGIES, STORAGE_KEYS, UserProfile } from '../types';
+import { STORAGE_KEYS, UserProfile } from '../types';
+import { ALLERGENS, CUSTOM_PREFIX } from '../lib/allergens';
 import { useLanguage } from '../components/LanguageProvider';
 
 export default function OnboardingPage() {
   const router = useRouter();
   const { t } = useLanguage();
   const [name, setName] = useState('');
-  const [selectedAllergies, setSelectedAllergies] = useState<string[]>([]);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]); // canonical allergen IDs
   const [customAllergy, setCustomAllergy] = useState('');
   const [customAllergies, setCustomAllergies] = useState<string[]>([]);
   const [step, setStep] = useState<1 | 2>(1);
@@ -24,31 +25,29 @@ export default function OnboardingPage() {
     setStep(2);
   };
 
-  const toggleAllergy = (allergy: string) => {
-    setSelectedAllergies((prev) =>
-      prev.includes(allergy) ? prev.filter((a) => a !== allergy) : [...prev, allergy]
-    );
+  const toggleAllergy = (id: string) => {
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((a) => a !== id) : [...prev, id]));
   };
 
   const addCustomAllergy = () => {
     const trimmed = customAllergy.trim();
     if (!trimmed) return;
-    if (!customAllergies.includes(trimmed) && !selectedAllergies.includes(trimmed)) {
-      setCustomAllergies((prev) => [...prev, trimmed]);
-      setSelectedAllergies((prev) => [...prev, trimmed]);
-    }
+    if (!customAllergies.includes(trimmed)) setCustomAllergies((prev) => [...prev, trimmed]);
     setCustomAllergy('');
   };
 
   const removeCustomAllergy = (allergy: string) => {
     setCustomAllergies((prev) => prev.filter((a) => a !== allergy));
-    setSelectedAllergies((prev) => prev.filter((a) => a !== allergy));
   };
 
+  const totalSelected = selectedIds.length + customAllergies.length;
+
   const handleFinish = () => {
+    // Store canonical IDs; custom free-text as `custom:<text>` so it round-trips.
+    const allergies = [...selectedIds, ...customAllergies.map((c) => `${CUSTOM_PREFIX}${c}`)];
     const profile: UserProfile = {
       name: name.trim(),
-      allergies: selectedAllergies,
+      allergies,
       createdAt: new Date().toISOString(),
     };
     localStorage.setItem(STORAGE_KEYS.PROFILE, JSON.stringify(profile));
@@ -119,12 +118,12 @@ export default function OnboardingPage() {
 
               {/* Common allergies grid */}
               <div className="grid grid-cols-2 gap-2 mb-5">
-                {COMMON_ALLERGIES.map((allergy) => {
-                  const selected = selectedAllergies.includes(allergy);
+                {ALLERGENS.map((allergen) => {
+                  const selected = selectedIds.includes(allergen.id);
                   return (
                     <button
-                      key={allergy}
-                      onClick={() => toggleAllergy(allergy)}
+                      key={allergen.id}
+                      onClick={() => toggleAllergy(allergen.id)}
                       className={`press flex items-center gap-2 px-3 py-2.5 rounded-xl border text-sm font-medium text-left transition-colors
                         ${selected
                           ? 'bg-green-50 dark:bg-green-950 border-green-500 dark:border-green-600 text-green-700 dark:text-green-300'
@@ -135,7 +134,8 @@ export default function OnboardingPage() {
                         ${selected ? 'bg-green-500 border-green-500 text-white' : 'border-gray-300 dark:border-gray-600'}`}>
                         {selected && '✓'}
                       </span>
-                      {t('allergy.' + allergy)}
+                      <span className="flex-shrink-0">{allergen.emoji}</span>
+                      {t('allergen.' + allergen.id)}
                     </button>
                   );
                 })}
@@ -187,7 +187,7 @@ export default function OnboardingPage() {
                 </button>
               </div>
 
-              {selectedAllergies.length === 0 && (
+              {totalSelected === 0 && (
                 <p className="text-center text-xs text-gray-400 dark:text-gray-500 mt-3">
                   {t('onboarding.noAllergies')}
                 </p>
