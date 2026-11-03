@@ -71,10 +71,17 @@ export async function POST(request: Request) {
     `directly relevant as a caution.\n` +
     `- Never diagnose or give medical advice. When unsure, say so and recommend checking the ` +
     `product label or asking an allergist.\n` +
-    `- If you think an allergen may be missing, only SUGGEST it in words (e.g. "this may also ` +
-    `contain X — consider correcting the ingredients in the edit screen"). You cannot edit anything.\n` +
+    `- If you think an allergen may be missing, only SUGGEST it in words and point the user to the ` +
+    `correct screen (see APP NAVIGATION). You cannot edit anything yourself.\n` +
     `- Keep answers short, in ${langName}. Use short paragraphs or simple bullet lists. No tables. ` +
-    `No headings like "Is it safe?". Do not output links or URLs.`;
+    `No headings like "Is it safe?". Do not output links or URLs.\n\n` +
+    `APP NAVIGATION — when telling the user where to do something, use ONLY these real paths ` +
+    `(translate the screen/button names into ${langName}); NEVER invent menus or screen names:\n` +
+    `- Change registered allergies: Home tab → "My Allergies" card → "Edit".\n` +
+    `- Correct a meal's ingredients: on the review screen shown right after an analysis, before saving.\n` +
+    `- Edit a saved meal's time, photo, or description: tap the pencil icon on that meal's card.\n` +
+    `If a task doesn't map to one of these paths, say you're not sure where that is rather than ` +
+    `inventing a screen.`;
 
   try {
     const response = await client.messages.create({
