@@ -52,10 +52,8 @@ export function appendMessage(mealId: string, message: StoredChatMessage): Store
 
 export function clearConversation(mealId: string) {
   const map = readAll();
-  if (map[mealId]) {
-    delete map[mealId];
-    writeAll(map);
-  }
+  delete map[mealId];
+  writeAll(map);
 }
 
 /** Remove a meal's conversation when the meal itself is deleted. */

@@ -1422,6 +1422,9 @@ function ChatSheet({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<'missing_key' | 'limit' | 'other' | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Bumped on clear; an in-flight send whose generation is stale must not re-apply
+  // its result to state/storage (that was the "Clear doesn't work" race).
+  const genRef = useRef(0);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
@@ -1437,6 +1440,7 @@ function ChatSheet({
   const send = async (text: string) => {
     const trimmed = text.trim();
     if (!trimmed || loading) return;
+    const gen = genRef.current;
     const userMsg: ChatMessage = { role: 'user', content: trimmed };
     const next = [...messages, userMsg];
     setMessages(next);
@@ -1447,6 +1451,10 @@ function ChatSheet({
 
     const userContext = buildUserContext({ profile, currentLog: log, logs, language });
     const res = await askAI(userContext, next, language, { kind: log.hasReaction ? 'reaction' : 'meal' });
+
+    // The conversation was cleared (or reset) while this request was in flight —
+    // drop the result so it can't re-populate state or storage.
+    if (genRef.current !== gen) return;
 
     if (res.reply) {
       const aiMsg: ChatMessage = { role: 'assistant', content: res.reply };
@@ -1459,9 +1467,12 @@ function ChatSheet({
   };
 
   const clearChat = () => {
+    genRef.current += 1; // cancel any in-flight send's result
     clearConversation(log.id);
     setMessages([]);
+    setInput('');
     setError(null);
+    setLoading(false);
   };
 
   return (
