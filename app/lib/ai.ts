@@ -8,8 +8,7 @@ import { CUSTOM_PREFIX } from './allergens';
 // login step exists. These are NOT security controls — they can be bypassed trivially.
 // Separate counters so chat usage can never block meal analyses, and vice-versa.
 export const DAILY_ANALYSIS_LIMIT = 30;
-// TEMP(testing): lowered to 3 to test the limit. Restore to 40 when done.
-export const CHAT_DAILY_LIMIT = 3;
+export const CHAT_DAILY_LIMIT = 40;
 
 function todayKey(): string {
   return new Date().toISOString().slice(0, 10);

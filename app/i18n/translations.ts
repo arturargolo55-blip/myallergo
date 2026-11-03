@@ -212,6 +212,7 @@ const pt = {
   // ── Analysis / limits / errors ──
   'ai.hiddenNote': 'Fotos não revelam ingredientes ocultos. Confira sempre o rótulo.',
   'ai.limitReached': 'Limite diário de análises atingido. Tente novamente amanhã.',
+  'ai.chatLimitReached': 'Limite diário de chat atingido. Tente novamente amanhã.',
   'ai.timeout': 'A análise demorou demais. Tente novamente.',
   'ai.analyzeError': 'Não foi possível analisar agora. Tente novamente.',
 
@@ -465,6 +466,7 @@ const en: typeof pt = {
   // ── Analysis / limits / errors ──
   'ai.hiddenNote': 'Photos cannot reveal hidden ingredients. Always check the label.',
   'ai.limitReached': 'Daily analysis limit reached. Please try again tomorrow.',
+  'ai.chatLimitReached': 'Daily chat limit reached. Please try again tomorrow.',
   'ai.timeout': 'The analysis took too long. Please try again.',
   'ai.analyzeError': 'Could not analyze right now. Please try again.',
 

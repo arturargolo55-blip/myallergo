@@ -1538,7 +1538,7 @@ function ChatSheet({
           )}
 
           {error === 'missing_key' && <p className="text-sm text-amber-600 dark:text-amber-500">{t('ai.unavailable')}</p>}
-          {error === 'limit' && <p className="text-sm text-amber-600 dark:text-amber-500">{t('ai.limitReached')}</p>}
+          {error === 'limit' && <p className="text-sm text-amber-600 dark:text-amber-500">{t('ai.chatLimitReached')}</p>}
           {error === 'other' && <p className="text-sm text-red-500">{t('ai.chat.error')}</p>}
         </div>
 
