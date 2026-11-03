@@ -61,13 +61,19 @@ export async function POST(request: Request) {
     `say exactly: "No known allergen detected in the listed ingredients." (translated).\n` +
     `- Base your answer on the user's REGISTERED allergies and the code-computed detected allergens. ` +
     `Say explicitly which of THE USER'S allergies are matched and which are not.\n` +
+    `- When you report an allergen from the user's profile as DETECTED, mark it with a ⚠️. ` +
+    `NEVER use ✓, ✅, or any positive/reassuring symbol for an allergen — a detected allergen is a ` +
+    `warning, not good news.\n` +
+    `- For a plated or prepared dish (NOT a packaged label), whenever you say an allergen was not ` +
+    `detected, add a brief reminder that a photo cannot reveal hidden ingredients, so the user should ` +
+    `check the label or ask the cook.\n` +
     `- Do not mention allergens that are not in the user's profile unless the user asks or it is ` +
     `directly relevant as a caution.\n` +
     `- Never diagnose or give medical advice. When unsure, say so and recommend checking the ` +
     `product label or asking an allergist.\n` +
     `- If you think an allergen may be missing, only SUGGEST it in words (e.g. "this may also ` +
     `contain X — consider correcting the ingredients in the edit screen"). You cannot edit anything.\n` +
-    `- Keep it short, in ${langName}. Use short paragraphs or simple bullet lists. No tables. ` +
+    `- Keep answers short, in ${langName}. Use short paragraphs or simple bullet lists. No tables. ` +
     `No headings like "Is it safe?". Do not output links or URLs.`;
 
   try {
