@@ -240,6 +240,10 @@ const pt = {
   'log.analyzeReview': 'Analisar com IA',
   'log.saveWithout': 'Salvar sem análise',
   'log.photoHint': 'A foto é reduzida e comprimida automaticamente.',
+
+  // ── Day / All list toggle ──
+  'list.byDay': 'Por dia',
+  'list.all': 'Todas',
 };
 
 const en: typeof pt = {
@@ -482,6 +486,10 @@ const en: typeof pt = {
   'log.analyzeReview': 'Analyze with AI',
   'log.saveWithout': 'Save without analysis',
   'log.photoHint': 'The photo is automatically downscaled and compressed.',
+
+  // ── Day / All list toggle ──
+  'list.byDay': 'By day',
+  'list.all': 'All',
 };
 
 export const translations: Record<Language, typeof pt> = { pt, en };

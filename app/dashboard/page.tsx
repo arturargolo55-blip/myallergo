@@ -52,6 +52,34 @@ function isSameDay(a: Date, b: Date): boolean {
   );
 }
 
+function startOfToday(): Date {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+/** Group logs (already sorted newest-first) into date buckets for the "All" view. */
+function groupByDate(logs: MealLog[], locale: string): { key: string; label: string; items: MealLog[] }[] {
+  const groups: { key: string; label: string; items: MealLog[] }[] = [];
+  const byKey = new Map<string, { key: string; label: string; items: MealLog[] }>();
+  for (const log of logs) {
+    const d = new Date(log.createdAt);
+    const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+    let g = byKey.get(key);
+    if (!g) {
+      g = {
+        key,
+        label: d.toLocaleDateString(locale, { weekday: 'short', day: '2-digit', month: 'short' }),
+        items: [],
+      };
+      byKey.set(key, g);
+      groups.push(g);
+    }
+    g.items.push(log);
+  }
+  return groups;
+}
+
 function getMealTime(log: MealLog): string {
   if (log.mealTime) return log.mealTime;
   const d = new Date(log.createdAt);
@@ -890,7 +918,7 @@ function DaySelector({
         return (
           <button
             key={i}
-            onClick={() => onChange(isSelected ? null : day)}
+            onClick={() => onChange(day)}
             className={`press flex-shrink-0 flex flex-col items-center px-3.5 py-2.5 rounded-2xl min-w-[54px] transition-colors ${
               isSelected
                 ? 'cta-green text-white'
@@ -1519,7 +1547,8 @@ export default function DashboardPage() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [logs, setLogs] = useState<MealLog[]>([]);
   const [activeTab, setActiveTab] = useState<'inicio' | 'refeicoes' | 'reacoes'>('inicio');
-  const [selectedDay, setSelectedDay] = useState<Date | null>(null);
+  const [selectedDay, setSelectedDay] = useState<Date | null>(() => startOfToday());
+  const [listView, setListView] = useState<'day' | 'all'>('day');
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [showThemeMenu, setShowThemeMenu] = useState(false);
 
@@ -1709,6 +1738,11 @@ export default function DashboardPage() {
     [filteredLogs]
   );
 
+  // "All" view: every meal / reaction across all dates, grouped by day.
+  const locale = language === 'en' ? 'en-US' : 'pt-BR';
+  const allMealGroups = useMemo(() => groupByDate(logs.filter((l) => !l.hasReaction), locale), [logs, locale]);
+  const allReactionGroups = useMemo(() => groupByDate(logs.filter((l) => l.hasReaction), locale), [logs, locale]);
+
   const todayLogs = useMemo(() => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -1723,6 +1757,53 @@ export default function DashboardPage() {
     .slice(0, 2)
     .join('')
     .toUpperCase();
+
+  const renderMeal = (log: MealLog, index: number) => (
+    <div key={log.id} className="animate-fade-slide-up" style={{ animationDelay: `${index * 0.04}s` }}>
+      <CompactMealCard
+        log={log}
+        onEdit={() => openMealEdit(log)}
+        onDelete={() => setDeleteId(log.id)}
+        onAsk={() => setChatLog(log)}
+        showDeleteConfirm={deleteId === log.id}
+        onConfirmDelete={() => deleteLog(log.id)}
+        onCancelDelete={() => setDeleteId(null)}
+      />
+    </div>
+  );
+
+  const renderReaction = (log: MealLog, index: number) => (
+    <div key={log.id} className="animate-fade-slide-up" style={{ animationDelay: `${index * 0.04}s` }}>
+      <ReactionCard
+        log={log}
+        onEdit={() => openReactionEdit(log)}
+        onDelete={() => setDeleteId(log.id)}
+        onAsk={() => setChatLog(log)}
+        showDeleteConfirm={deleteId === log.id}
+        onConfirmDelete={() => deleteLog(log.id)}
+        onCancelDelete={() => setDeleteId(null)}
+      />
+    </div>
+  );
+
+  // Day/All segmented toggle used by the Meals and Reactions tabs.
+  const viewToggle = (
+    <div className="flex gap-1 p-1 bg-gray-100 dark:bg-gray-800 rounded-xl">
+      {(['day', 'all'] as const).map((v) => (
+        <button
+          key={v}
+          onClick={() => setListView(v)}
+          className={`press flex-1 text-sm font-semibold py-2 rounded-lg transition-colors ${
+            listView === v
+              ? 'bg-white dark:bg-gray-900 text-green-600 dark:text-green-400 shadow-sm'
+              : 'text-gray-500 dark:text-gray-400'
+          }`}
+        >
+          {t(v === 'day' ? 'list.byDay' : 'list.all')}
+        </button>
+      ))}
+    </div>
+  );
 
   return (
     <div className="min-h-screen app-bg">
@@ -2034,32 +2115,31 @@ export default function DashboardPage() {
         {/* ── MEALS TAB ── */}
         {activeTab === 'refeicoes' && (
           <div className="space-y-4 animate-tab">
-            <DaySelector weekDays={weekDays} selectedDay={selectedDay} onChange={setSelectedDay} />
+            {viewToggle}
 
-            {filteredMeals.length === 0 ? (
+            {listView === 'day' ? (
+              <>
+                <DaySelector weekDays={weekDays} selectedDay={selectedDay} onChange={setSelectedDay} />
+                {filteredMeals.length === 0 ? (
+                  <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 p-10 text-center animate-pop-in">
+                    <div className="icon-tile w-20 h-20 mx-auto mb-4 bg-gradient-to-br from-emerald-100 to-green-200 dark:from-emerald-950 dark:to-green-900 text-4xl animate-float">🍽️</div>
+                    <p className="text-gray-600 dark:text-gray-400 font-medium text-sm">{t('meals.empty.filtered')}</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">{filteredMeals.map((log, i) => renderMeal(log, i))}</div>
+                )}
+              </>
+            ) : allMealGroups.length === 0 ? (
               <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 p-10 text-center animate-pop-in">
                 <div className="icon-tile w-20 h-20 mx-auto mb-4 bg-gradient-to-br from-emerald-100 to-green-200 dark:from-emerald-950 dark:to-green-900 text-4xl animate-float">🍽️</div>
-                <p className="text-gray-600 dark:text-gray-400 font-medium text-sm">
-                  {selectedDay ? t('meals.empty.filtered') : t('meals.empty.all')}
-                </p>
+                <p className="text-gray-600 dark:text-gray-400 font-medium text-sm">{t('meals.empty.all')}</p>
               </div>
             ) : (
-              <div className="space-y-2">
-                {filteredMeals.map((log, index) => (
-                  <div
-                    key={log.id}
-                    className="animate-fade-slide-up"
-                    style={{ animationDelay: `${index * 0.04}s` }}
-                  >
-                    <CompactMealCard
-                      log={log}
-                      onEdit={() => openMealEdit(log)}
-                      onDelete={() => setDeleteId(log.id)}
-                      onAsk={() => setChatLog(log)}
-                      showDeleteConfirm={deleteId === log.id}
-                      onConfirmDelete={() => deleteLog(log.id)}
-                      onCancelDelete={() => setDeleteId(null)}
-                    />
+              <div className="space-y-5">
+                {allMealGroups.map((g) => (
+                  <div key={g.key} className="space-y-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500 px-1">{g.label}</p>
+                    {g.items.map((log, i) => renderMeal(log, i))}
                   </div>
                 ))}
               </div>
@@ -2070,36 +2150,31 @@ export default function DashboardPage() {
         {/* ── REACTIONS TAB ── */}
         {activeTab === 'reacoes' && (
           <div className="space-y-4 animate-tab">
-            <DaySelector weekDays={weekDays} selectedDay={selectedDay} onChange={setSelectedDay} />
+            {viewToggle}
 
-            {filteredReactions.length === 0 ? (
+            {listView === 'day' ? (
+              <>
+                <DaySelector weekDays={weekDays} selectedDay={selectedDay} onChange={setSelectedDay} />
+                {filteredReactions.length === 0 ? (
+                  <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 p-10 text-center animate-pop-in">
+                    <div className="icon-tile w-20 h-20 mx-auto mb-4 bg-gradient-to-br from-emerald-100 to-green-200 dark:from-emerald-950 dark:to-green-900 text-4xl animate-float">✅</div>
+                    <p className="text-gray-600 dark:text-gray-400 font-medium text-sm">{t('reactions.empty.filtered')}</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">{filteredReactions.map((log, i) => renderReaction(log, i))}</div>
+                )}
+              </>
+            ) : allReactionGroups.length === 0 ? (
               <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 p-10 text-center animate-pop-in">
                 <div className="icon-tile w-20 h-20 mx-auto mb-4 bg-gradient-to-br from-emerald-100 to-green-200 dark:from-emerald-950 dark:to-green-900 text-4xl animate-float">✅</div>
-                <p className="text-gray-600 dark:text-gray-400 font-medium text-sm">
-                  {filteredLogs.length > 0
-                    ? t('reactions.empty.filtered')
-                    : selectedDay
-                    ? t('reactions.empty.noMeals')
-                    : t('reactions.empty.all')}
-                </p>
+                <p className="text-gray-600 dark:text-gray-400 font-medium text-sm">{t('reactions.empty.all')}</p>
               </div>
             ) : (
-              <div className="space-y-2">
-                {filteredReactions.map((log, index) => (
-                  <div
-                    key={log.id}
-                    className="animate-fade-slide-up"
-                    style={{ animationDelay: `${index * 0.04}s` }}
-                  >
-                    <ReactionCard
-                      log={log}
-                      onEdit={() => openReactionEdit(log)}
-                      onDelete={() => setDeleteId(log.id)}
-                      onAsk={() => setChatLog(log)}
-                      showDeleteConfirm={deleteId === log.id}
-                      onConfirmDelete={() => deleteLog(log.id)}
-                      onCancelDelete={() => setDeleteId(null)}
-                    />
+              <div className="space-y-5">
+                {allReactionGroups.map((g) => (
+                  <div key={g.key} className="space-y-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 dark:text-gray-500 px-1">{g.label}</p>
+                    {g.items.map((log, i) => renderReaction(log, i))}
                   </div>
                 ))}
               </div>
