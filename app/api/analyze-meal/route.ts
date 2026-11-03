@@ -1,7 +1,13 @@
 import { NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
-import { z } from 'zod';
-import { crossCheckAllergens, computeRiskLevel, type AllergenMatch } from '../../lib/allergens';
+import { crossCheckAllergens, computeRiskLevel } from '../../lib/allergens';
+import {
+  MealModelSchema,
+  MEAL_OUTPUT_JSON_SCHEMA,
+  buildMealAnalysis,
+  mergeStatedIngredients,
+} from '../../lib/analysis';
+import type { AnalyzedIngredient, MealAnalysis } from '../../types';
 
 export const runtime = 'nodejs';
 export const maxDuration = 45;
@@ -11,58 +17,6 @@ const MODEL = process.env.ANALYSIS_MODEL || 'claude-sonnet-4-6';
 
 // NOTE: ANTHROPIC_API_KEY is read server-side only (never shipped to the client);
 // `.env*` is git-ignored. Do not expose it in any response.
-
-// ─── Strict model-output contract (zod is the source of truth) ─────────────────
-const IngredientZ = z.object({
-  name: z.string().min(1),
-  confidence: z.enum(['label', 'likely', 'uncertain']),
-});
-const ModelOutputZ = z.object({
-  sourceType: z.enum(['label', 'plate', 'text']),
-  ingredients: z.array(IngredientZ),
-  calories: z.number().nullish(),
-  macros: z
-    .object({ protein_g: z.number(), carbs_g: z.number(), fat_g: z.number() })
-    .nullish(),
-  macrosAreEstimate: z.boolean(),
-  traces: z.array(z.string()).default([]),
-  possibleHiddenAllergens: z.array(z.string()).default([]),
-  clarifyingQuestion: z.string().nullish(),
-});
-type ModelOutput = z.infer<typeof ModelOutputZ>;
-
-// JSON schema handed to the model (kept in sync with the zod shape above).
-const OUTPUT_JSON_SCHEMA = {
-  type: 'object',
-  additionalProperties: false,
-  properties: {
-    sourceType: { type: 'string', enum: ['label', 'plate', 'text'] },
-    ingredients: {
-      type: 'array',
-      items: {
-        type: 'object',
-        additionalProperties: false,
-        properties: {
-          name: { type: 'string' },
-          confidence: { type: 'string', enum: ['label', 'likely', 'uncertain'] },
-        },
-        required: ['name', 'confidence'],
-      },
-    },
-    calories: { type: 'integer', description: 'kcal; null if unknown.' },
-    macros: {
-      type: 'object',
-      additionalProperties: false,
-      properties: { protein_g: { type: 'number' }, carbs_g: { type: 'number' }, fat_g: { type: 'number' } },
-      required: ['protein_g', 'carbs_g', 'fat_g'],
-    },
-    macrosAreEstimate: { type: 'boolean' },
-    traces: { type: 'array', items: { type: 'string' } },
-    possibleHiddenAllergens: { type: 'array', items: { type: 'string' } },
-    clarifyingQuestion: { type: 'string' },
-  },
-  required: ['sourceType', 'ingredients', 'macrosAreEstimate', 'traces', 'possibleHiddenAllergens'],
-} as const;
 
 type MediaType = 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
 function parseDataUrl(dataUrl: string): { media_type: MediaType; data: string } | null {
@@ -82,6 +36,7 @@ export async function POST(request: Request) {
     photoDataUrl?: string;
     knownAllergies?: string[]; // canonical IDs
     language?: string;
+    statedIngredients?: AnalyzedIngredient[]; // user-edited items to keep (re-run)
   };
   try {
     body = await request.json();
@@ -89,7 +44,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'bad_request', message: 'Invalid JSON body.' }, { status: 400 });
   }
 
-  const { mealName, description, photoDataUrl, knownAllergies = [], language = 'pt' } = body;
+  const { mealName, description, photoDataUrl, knownAllergies = [], language = 'pt', statedIngredients = [] } = body;
   if (!mealName?.trim() && !photoDataUrl) {
     return NextResponse.json({ error: 'bad_request', message: 'A meal name or a photo is required.' }, { status: 400 });
   }
@@ -98,23 +53,40 @@ export async function POST(request: Request) {
   const langName = languageName(language);
 
   const system =
-    `You are an INGREDIENT-EXTRACTION assistant for a food-allergy app. Your ONLY job is to ` +
-    `extract ingredients and estimate nutrition. You do NOT decide allergen warnings — the app ` +
+    `You are an INGREDIENT-EXTRACTION assistant for a food-allergy app. Your ONLY job is to extract ` +
+    `ingredients (with amounts) and estimate nutrition. You do NOT decide allergen warnings — the app ` +
     `does that in code. Return STRICT JSON matching the schema.\n\n` +
     `First set "sourceType":\n` +
-    `• "label" — a packaged-food label/ingredients list. READ the printed ingredient list verbatim ` +
-    `(each item confidence "label"). Put "may contain traces of…" / "produced in a facility…" items ` +
-    `in "traces" (do NOT put them in ingredients). Use label nutrition for macros if present and set ` +
-    `"macrosAreEstimate": false.\n` +
-    `• "plate" — a photo/description of prepared food. List the ingredients you can see/infer, each ` +
-    `with confidence "likely" (clearly present) or "uncertain" (plausible but unsure, e.g. a sauce ` +
-    `that may contain cream). Estimate calories/macros and set "macrosAreEstimate": true.\n` +
+    `• "label" — a packaged-food label. READ the printed ingredient list verbatim (confidence "label"). ` +
+    `Put "may contain traces of…" items in "traces" (not in ingredients). Use label nutrition if present ` +
+    `and set "macrosAreEstimate": false.\n` +
+    `• "plate" — a photo/description of prepared food. List ingredients you can see/infer, each with ` +
+    `confidence "likely" (clearly present) or "uncertain" (plausible but unsure). Set "macrosAreEstimate": true.\n` +
     `• "text" — only text, no photo. Same as plate, from the name/description.\n\n` +
-    `Also return "possibleHiddenAllergens": short generic suggestions of allergens that commonly hide ` +
-    `in dishes like this (these are SUGGESTIONS, not confirmations). If an "uncertain" ingredient could ` +
-    `hide a common allergen, set "clarifyingQuestion" to ONE short question (in ${langName}) that would ` +
-    `resolve it (e.g. "Does the sauce contain cheese or cream?"); otherwise omit it.\n\n` +
-    `Write all natural-language strings (ingredient names, traces, question) in ${langName}.`;
+    `AMOUNTS: for each ingredient estimate a quantity — set "amount" (number) and "unit" ` +
+    `(e.g. "eggs", "g", "ml", "tbsp", "tsp", "slice"). Respect any quantities the user wrote.\n` +
+    `USER-STATED INGREDIENTS: ingredients the user explicitly wrote in the name/description get ` +
+    `confidence "stated" (the HIGHEST confidence). When the user's text conflicts with what a photo ` +
+    `suggests, the user's text wins.\n` +
+    `COOKING FAT / SAUCE: if the dish is fried, sautéed, grilled with oil, dressed, or shows visible ` +
+    `butter/oil/sauce, list the added fat or sauce as its OWN ingredient with an estimated amount — ` +
+    `do not ignore it.\n` +
+    `CALORIES: return "calorieRange" with integer "min" ≤ "estimate" ≤ "max", and a short "reason" when ` +
+    `the band is wide (e.g. unknown amount of oil). Protein/carbs/fat are estimates.\n` +
+    `CLARIFYING QUESTION: if the amount of added fat, sauce, sugar, or the portion size is a MAJOR ` +
+    `uncertainty, set "clarifyingQuestion" to ONE short question in ${langName} with 2–4 quick-pick ` +
+    `"options" (e.g. "~1 tsp", "~1 tbsp", "more"); otherwise omit it.\n` +
+    `"possibleHiddenAllergens": only allergens NOT already obvious from the listed ingredients.\n\n` +
+    `Write all natural-language strings in ${langName}.`;
+
+  const statedText = statedIngredients.length
+    ? `The user has already CORRECTED these ingredients — treat them as authoritative ("stated"), keep ` +
+      `them in your output, and only ADD information:\n` +
+      statedIngredients
+        .map((i) => `- ${i.name}${i.amount != null ? ` (${i.amount}${i.unit ? ' ' + i.unit : ''})` : ''}`)
+        .join('\n') +
+      '\n\n'
+    : '';
 
   const content: Anthropic.ContentBlockParam[] = [];
   const img = photoDataUrl ? parseDataUrl(photoDataUrl) : null;
@@ -124,12 +96,12 @@ export async function POST(request: Request) {
     text:
       `Meal name: ${mealName?.trim() || '(none)'}\n` +
       `Description: ${description?.trim() || '(none)'}\n` +
+      statedText +
       `${img ? 'A photo is attached. Determine if it is a label or a plate.' : 'No photo; sourceType is "text".'}\n\n` +
-      `Extract ingredients and estimate nutrition. Return only the JSON.`,
+      `Extract ingredients (with amounts) and estimate nutrition. Return only the JSON.`,
   });
 
   // Up to 2 attempts: parse + zod-validate; retry once on invalid output.
-  let lastErr: unknown = null;
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const message = await client.messages.create({
@@ -137,27 +109,24 @@ export async function POST(request: Request) {
         max_tokens: 2048,
         thinking: { type: 'adaptive' },
         system,
-        output_config: { effort: 'low', format: { type: 'json_schema', schema: OUTPUT_JSON_SCHEMA } },
+        output_config: { effort: 'low', format: { type: 'json_schema', schema: MEAL_OUTPUT_JSON_SCHEMA } },
         messages: [{ role: 'user', content }],
       });
       const textBlock = message.content.find((b) => b.type === 'text');
-      if (!textBlock || textBlock.type !== 'text' || !textBlock.text.trim()) {
-        lastErr = 'empty';
-        continue;
-      }
+      if (!textBlock || textBlock.type !== 'text' || !textBlock.text.trim()) continue;
       let json: unknown;
       try {
         json = JSON.parse(textBlock.text);
       } catch {
-        lastErr = 'parse';
         continue;
       }
-      const parsed = ModelOutputZ.safeParse(json);
-      if (!parsed.success) {
-        lastErr = parsed.error;
-        continue;
-      }
-      return NextResponse.json(buildAnalysis(parsed.data, knownAllergies));
+      const parsed = MealModelSchema.safeParse(json);
+      if (!parsed.success) continue;
+
+      let analysis = buildMealAnalysis(parsed.data, knownAllergies);
+      // Edit-preserving re-run: keep the user's corrected ingredients, recompute allergens.
+      if (statedIngredients.length) analysis = applyStated(analysis, statedIngredients, knownAllergies);
+      return NextResponse.json(analysis);
     } catch (err) {
       return mapError(err); // API/auth/rate-limit/network — don't retry these here
     }
@@ -169,40 +138,17 @@ export async function POST(request: Request) {
   );
 }
 
-/** Code-driven allergen cross-check + risk level (NOT the model's job). */
-function buildAnalysis(m: ModelOutput, knownAllergies: string[]) {
-  const ingredientMatches = crossCheckAllergens(m.ingredients, knownAllergies);
-  const traceMatches = crossCheckAllergens(m.traces ?? [], knownAllergies, { baseStrength: 'possible' });
-  const hiddenMatches = crossCheckAllergens(m.possibleHiddenAllergens ?? [], knownAllergies, { baseStrength: 'possible' });
-
-  // Merge, keeping the strongest strength per allergen+ingredient.
-  const all: AllergenMatch[] = [...ingredientMatches, ...traceMatches, ...hiddenMatches];
-  const detectedAllergens = dedupe(all);
-
+/** Merge the user's stated ingredients back in and recompute code-owned allergens/risk. */
+function applyStated(analysis: MealAnalysis, stated: AnalyzedIngredient[], allergyIds: string[]): MealAnalysis {
+  const ingredients = mergeStatedIngredients(analysis.ingredients ?? [], stated);
+  const detectedAllergens = crossCheckAllergens(ingredients, allergyIds);
   return {
-    sourceType: m.sourceType,
-    ingredients: m.ingredients,
-    calories: m.calories ?? undefined,
-    macros: m.macros ?? undefined,
-    macrosAreEstimate: m.macrosAreEstimate,
-    traces: m.traces,
-    possibleHiddenAllergens: m.possibleHiddenAllergens,
-    clarifyingQuestion: m.clarifyingQuestion ?? undefined,
+    ...analysis,
+    ingredients,
     detectedAllergens,
     riskLevel: computeRiskLevel(detectedAllergens),
-    userEdited: false,
-    analyzedAt: new Date().toISOString(),
+    userEdited: true,
   };
-}
-
-function dedupe(matches: AllergenMatch[]): AllergenMatch[] {
-  const best = new Map<string, AllergenMatch>();
-  for (const mm of matches) {
-    const key = `${mm.allergenId}::${mm.ingredient.toLowerCase()}`;
-    const prev = best.get(key);
-    if (!prev || (prev.strength === 'possible' && mm.strength === 'match')) best.set(key, mm);
-  }
-  return [...best.values()];
 }
 
 function languageName(language: string): string {

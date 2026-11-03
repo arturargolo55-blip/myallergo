@@ -95,6 +95,15 @@ test('no allergens for the user → none_detected', () => {
   assert.equal(risk(['white rice', 'olive oil'], ['milk', 'peanut']).level, 'none_detected');
 });
 
+test('allergens recompute after an edit (ingredients changed → new detected set)', () => {
+  const ids = ['milk', 'gluten'];
+  const before = crossCheckAllergens([{ name: 'wheat bread' }, { name: 'cheese' }], ids);
+  assert.deepEqual(detectedAllergenIds(before).sort(), ['gluten', 'milk']);
+  // User removes the cheese and keeps only bread → milk should drop out.
+  const after = crossCheckAllergens([{ name: 'wheat bread' }], ids);
+  assert.deepEqual(detectedAllergenIds(after).sort(), ['gluten']);
+});
+
 test('migrateAllergies: old PT labels → IDs, custom preserved', () => {
   assert.deepEqual(migrateAllergies(['Leite / Lactose', 'Ovos']).sort(), ['egg', 'milk']);
   assert.deepEqual(migrateAllergies(['Frutos do mar']).sort(), ['crustaceans', 'molluscs']);

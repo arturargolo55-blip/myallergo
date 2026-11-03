@@ -43,12 +43,21 @@ export interface MealMacros {
   fat_g: number;
 }
 
-/** Per-ingredient confidence: read off a label, inferred-likely, or a guess. */
-export type IngredientConfidence = 'label' | 'likely' | 'uncertain';
+/**
+ * Per-ingredient confidence, highest first:
+ * - `stated`: the user explicitly wrote it (text wins over photo inference)
+ * - `label`: read off a packaged-food label
+ * - `likely`: clearly present in a plate/photo
+ * - `uncertain`: plausible but unsure
+ */
+export type IngredientConfidence = 'stated' | 'label' | 'likely' | 'uncertain';
 
 export interface AnalyzedIngredient {
   name: string;
   confidence: IngredientConfidence;
+  /** Estimated quantity, e.g. amount 2 unit "eggs", or amount 10 unit "g". */
+  amount?: number;
+  unit?: string;
 }
 
 /** A code-generated allergen hit (produced by lib/allergens.ts, NOT by the model). */
@@ -62,11 +71,28 @@ export interface AllergenMatch {
 export type AnalysisSourceType = 'label' | 'plate' | 'text';
 export type RiskLevel = 'none_detected' | 'possible' | 'detected';
 
+/** A low/estimate/high calorie band. `estimate` is the point value shown by default. */
+export interface CalorieRange {
+  min: number;
+  estimate: number;
+  max: number;
+  /** Short reason shown when the band is wide (e.g. unknown amount of oil). */
+  reason?: string;
+}
+
+/** One short question (user's language) with optional quick-pick answers. */
+export interface ClarifyingQuestion {
+  question: string;
+  options?: string[];
+}
+
 export interface MealAnalysis {
   /** Whether the photo/input was a packaged-food label, a plate of food, or text only. */
   sourceType: AnalysisSourceType;
   ingredients?: AnalyzedIngredient[];
+  /** Point estimate (kept in sync with calorieRange.estimate when a range is present). */
   calories?: number;
+  calorieRange?: CalorieRange;
   macros?: MealMacros;
   /** Plate photos / text give estimates; labels give per-serving facts. */
   macrosAreEstimate: boolean;
@@ -74,8 +100,8 @@ export interface MealAnalysis {
   traces?: string[];
   /** Generic model suggestions of allergens that MIGHT hide here — shown as suggestions only. */
   possibleHiddenAllergens?: string[];
-  /** Model's clarifying question (user's language) when an uncertain ingredient could hide an allergen. */
-  clarifyingQuestion?: string;
+  /** Model's clarifying question (user's language), with optional quick-pick options. */
+  clarifyingQuestion?: ClarifyingQuestion;
   /** Code-generated allergen warnings cross-checked against the user's allergy IDs. */
   detectedAllergens: AllergenMatch[];
   riskLevel: RiskLevel;
@@ -164,4 +190,6 @@ export const STORAGE_KEYS = {
   USAGE: 'allergy-tracker-ai-usage',
   CHAT_USAGE: 'allergy-tracker-ai-chat-usage',
   CHATS: 'allergy-tracker-chats',
+  LAST_SAVED: 'allergy-tracker-last-saved', // transient: {id, at} to toast/highlight on Home
+  PENDING_MEAL_ID: 'allergy-tracker-pending-meal-id', // idempotent id across Analyze retries/reloads
 } as const;

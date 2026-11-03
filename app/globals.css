@@ -94,6 +94,11 @@ button:active:not(:disabled) {
   animation: indeterminate 1.1s ease-in-out infinite;
 }
 
+/* Determinate analysis progress bar — smooth width easing (honest, phase-driven) */
+.analysis-bar {
+  transition: width 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 /* Markdown rendered in chat bubbles — compact, theme-consistent spacing */
 .chat-prose > :first-child { margin-top: 0; }
 .chat-prose > :last-child { margin-bottom: 0; }
@@ -292,5 +297,8 @@ button:active:not(:disabled) {
     animation: none !important;
     margin-left: 0 !important;
     width: 100% !important;
+  }
+  .analysis-bar {
+    transition: none !important;
   }
 }

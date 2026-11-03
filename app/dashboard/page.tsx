@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
+  ClarifyingQuestion,
   COMMON_SYMPTOMS,
   Likelihood,
   MealAnalysis,
@@ -22,13 +23,25 @@ import { useLanguage } from '../components/LanguageProvider';
 import { Language, TFunction } from '../i18n/translations';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { analyzePatterns, analyzeReactionLog, askAI, buildUserContext, ChatMessage } from '../lib/ai';
+import { analyzePatterns, analyzeReactionLog, askAI, buildUserContext, ChatMessage, reanalyzeMeal } from '../lib/ai';
 import { ALLERGENS, CUSTOM_PREFIX, migrateAllergies, needsMigration } from '../lib/allergens';
+import { formatAmount } from '../lib/analysis';
 import { appendMessage, clearConversation, deleteConversation, loadConversation } from '../lib/chatStore';
+import { AnalysisEditor } from '../components/AnalysisEditor';
 
 /** Localized allergen label: canonical IDs via i18n, custom entries as their text. */
 function allergenLabel(id: string, t: TFunction): string {
   return id.startsWith(CUSTOM_PREFIX) ? id.slice(CUSTOM_PREFIX.length) : t('allergen.' + id);
+}
+
+/** Toast copy after a meal auto-saves — names the user's detected allergies when any. */
+function buildToastText(log: MealLog, t: TFunction): string {
+  const a = log.analysis;
+  const ids = a?.detectedAllergens ? [...new Set(a.detectedAllergens.map((m) => m.allergenId))] : [];
+  if (a && a.riskLevel !== 'none_detected' && ids.length) {
+    return t('toast.savedDetected', { meal: log.mealName, allergens: ids.map((id) => allergenLabel(id, t)).join(', ') });
+  }
+  return t('toast.saved', { meal: log.mealName });
 }
 
 const MAX_PHOTO_MB = 1.5;
@@ -297,10 +310,12 @@ function EditMealModal({
   log,
   onSave,
   onClose,
+  onEditAnalysis,
 }: {
   log: MealLog;
   onSave: (updated: MealLog) => void;
   onClose: () => void;
+  onEditAnalysis?: () => void;
 }) {
   const { t } = useLanguage();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -348,6 +363,15 @@ function EditMealModal({
             ×
           </button>
         </div>
+
+        {log.analysis && onEditAnalysis && (
+          <button
+            onClick={onEditAnalysis}
+            className="press w-full text-sm font-semibold text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 py-2.5 rounded-xl"
+          >
+            ✏️ {t('analysis.editAnalysis')}
+          </button>
+        )}
 
         <div>
           <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -949,6 +973,9 @@ function CompactMealCard({
   onEdit,
   onDelete,
   onAsk,
+  onEditAnalysis,
+  onAnswerClarify,
+  highlight,
   showDeleteConfirm,
   onConfirmDelete,
   onCancelDelete,
@@ -957,6 +984,9 @@ function CompactMealCard({
   onEdit: () => void;
   onDelete: () => void;
   onAsk: () => void;
+  onEditAnalysis: () => void;
+  onAnswerClarify: () => void;
+  highlight?: boolean;
   showDeleteConfirm: boolean;
   onConfirmDelete: () => void;
   onCancelDelete: () => void;
@@ -969,7 +999,9 @@ function CompactMealCard({
   return (
     <div
       className={`hover-lift bg-white dark:bg-gray-900 rounded-xl border overflow-hidden ${
-        log.hasReaction
+        highlight
+          ? 'border-green-400 dark:border-green-600 ring-2 ring-green-400/50 animate-pop-in'
+          : log.hasReaction
           ? 'border-red-100 dark:border-red-900'
           : 'border-gray-100 dark:border-gray-800'
       }`}
@@ -1020,13 +1052,23 @@ function CompactMealCard({
       {(log.analysis || log.analysisStatus === 'pending') && (
         <div className="px-4 pb-3">
           <MealAnalysisBadge log={log} />
-          {log.analysis && (
+          {log.analysis?.clarifyingQuestion && (
             <button
-              onClick={onAsk}
-              className="press mt-2 ml-14 text-xs font-semibold text-green-600 dark:text-green-400 hover:underline"
+              onClick={onAnswerClarify}
+              className="press mt-2 ml-14 flex items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 px-2.5 py-1 rounded-full"
             >
-              💬 {t('ai.chat.button')}
+              ❓ {t('analysis.clarifyChip')}
             </button>
+          )}
+          {log.analysis && (
+            <div className="mt-2 ml-14 flex flex-wrap gap-3">
+              <button onClick={onAsk} className="press text-xs font-semibold text-green-600 dark:text-green-400 hover:underline">
+                💬 {t('ai.chat.button')}
+              </button>
+              <button onClick={onEditAnalysis} className="press text-xs font-semibold text-gray-500 dark:text-gray-400 hover:underline">
+                ✏️ {t('analysis.editAnalysis')}
+              </button>
+            </div>
           )}
         </div>
       )}
@@ -1207,9 +1249,13 @@ function MealAnalysisBadge({ log }: { log: MealLog }) {
             {t('risk.' + a.riskLevel)}
           </span>
         )}
-        {typeof a.calories === 'number' && (
+        {a.calorieRange ? (
+          <span className="text-xs font-medium text-gray-600 dark:text-gray-300">
+            🔥 ~{a.calorieRange.min}–{a.calorieRange.max} {t('ai.kcal')}
+          </span>
+        ) : typeof a.calories === 'number' ? (
           <span className="text-xs font-medium text-gray-600 dark:text-gray-300">🔥 {a.calories} {t('ai.kcal')}</span>
-        )}
+        ) : null}
         {a.macros && (
           <span className="text-xs text-gray-400 dark:text-gray-500">
             · {t('macro.p')} {Math.round(a.macros.protein_g)}{t('ai.gram')} · {t('macro.c')}{' '}
@@ -1235,6 +1281,17 @@ function MealAnalysisBadge({ log }: { log: MealLog }) {
 
       {isV2 && a.riskLevel === 'none_detected' && detectedIds.length === 0 && (
         <p className="text-[11px] text-gray-400 dark:text-gray-500">{t('risk.none_detected.note')}</p>
+      )}
+
+      {a.ingredients && a.ingredients.length > 0 && (
+        <p className="text-[11px] text-gray-500 dark:text-gray-400">
+          {a.ingredients
+            .map((ing) => {
+              const amt = formatAmount(ing);
+              return amt ? `${ing.name} (${amt})` : ing.name;
+            })
+            .join(', ')}
+        </p>
       )}
 
       <p className="text-[11px] text-gray-400 dark:text-gray-500 italic">{t('ai.hiddenNote')}</p>
@@ -1580,6 +1637,86 @@ function ChatSheet({
   );
 }
 
+// ─── ClarifySheet: quick-pick answer to the model's clarifying question ─────────
+
+function ClarifySheet({
+  question,
+  onAnswer,
+  onClose,
+}: {
+  question: ClarifyingQuestion;
+  onAnswer: (answer: string) => void;
+  onClose: () => void;
+}) {
+  const { t } = useLanguage();
+  const [free, setFree] = useState('');
+  return (
+    <ModalSheet onClose={onClose}>
+      <div className="px-5 pb-8 space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{t('analysis.clarifyTitle')}</h2>
+          <button onClick={onClose} className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 text-xl leading-none">
+            ×
+          </button>
+        </div>
+        <p className="text-sm text-gray-700 dark:text-gray-300">❓ {question.question}</p>
+        {question.options && question.options.length > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {question.options.map((opt) => (
+              <button
+                key={opt}
+                onClick={() => onAnswer(opt)}
+                className="press text-sm bg-green-50 dark:bg-green-950 border border-green-300 dark:border-green-700 text-green-700 dark:text-green-300 px-3 py-2 rounded-xl"
+              >
+                {opt}
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="flex items-center gap-2">
+          <input
+            value={free}
+            onChange={(e) => setFree(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && free.trim() && onAnswer(free.trim())}
+            placeholder={t('review.answerPlaceholder')}
+            className="flex-1 px-3 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-500"
+          />
+          <button
+            onClick={() => free.trim() && onAnswer(free.trim())}
+            disabled={!free.trim()}
+            className="cta-green press px-4 py-2.5 rounded-xl text-white text-sm font-semibold disabled:opacity-40"
+          >
+            {t('review.rerun')}
+          </button>
+        </div>
+      </div>
+    </ModalSheet>
+  );
+}
+
+// ─── Toast: non-blocking save confirmation ──────────────────────────────────────
+
+function Toast({ text, onView, onClose }: { text: string; onView: () => void; onClose: () => void }) {
+  const { t } = useLanguage();
+  return (
+    <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] w-[min(92vw,30rem)] animate-fade-slide-up">
+      <div
+        role="status"
+        aria-live="polite"
+        className="flex items-center gap-3 bg-gray-900 dark:bg-gray-800 text-white rounded-2xl shadow-xl px-4 py-3"
+      >
+        <span className="flex-1 text-sm font-medium">{text}</span>
+        <button onClick={onView} className="press text-sm font-bold text-green-400 flex-shrink-0">
+          {t('toast.view')}
+        </button>
+        <button onClick={onClose} className="text-white/60 hover:text-white text-lg leading-none flex-shrink-0">
+          ×
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── DashboardPage ────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
@@ -1601,6 +1738,10 @@ export default function DashboardPage() {
   const [showLogReactionModal, setShowLogReactionModal] = useState(false);
 
   const [chatLog, setChatLog] = useState<MealLog | null>(null);
+  const [editAnalysisLog, setEditAnalysisLog] = useState<MealLog | null>(null);
+  const [clarifyLog, setClarifyLog] = useState<MealLog | null>(null);
+  const [toast, setToast] = useState<{ text: string; viewId: string } | null>(null);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
   const [patternInsight, setPatternInsight] = useState<PatternInsight | null>(null);
   const [patternLoading, setPatternLoading] = useState(false);
   const [patternError, setPatternError] = useState<'missing_key' | 'other' | null>(null);
@@ -1664,6 +1805,52 @@ export default function DashboardPage() {
     if (chatLog?.id === id) setChatLog(null);
     setDeleteId(null);
   };
+
+  const patchMealLog = (id: string, patch: Partial<MealLog>) => {
+    setLogs((prev) => {
+      const next = prev.map((l) => (l.id === id ? { ...l, ...patch } : l));
+      localStorage.setItem(STORAGE_KEYS.LOGS, JSON.stringify(next));
+      return next;
+    });
+  };
+
+  // Save an on-demand analysis edit (code-recomputed allergens, userEdited already set).
+  const saveAnalysisEdit = (updatedAnalysis: MealAnalysis) => {
+    if (!editAnalysisLog) return;
+    patchMealLog(editAnalysisLog.id, { analysis: updatedAnalysis, analysisStatus: 'done' });
+    setEditAnalysisLog(null);
+  };
+
+  // Answer a clarifying question → re-run analysis (keeps user edits), update in place.
+  const submitClarify = async (answer: string) => {
+    const target = clarifyLog;
+    setClarifyLog(null);
+    if (!target) return;
+    patchMealLog(target.id, { analysisStatus: 'pending' });
+    const res = await reanalyzeMeal(target, answer, profile?.allergies ?? [], language);
+    patchMealLog(target.id, res.analysis ? { analysis: res.analysis, analysisStatus: 'done' } : { analysisStatus: 'done' });
+  };
+
+  // One-shot: after a meal is auto-saved on the log page, toast + highlight it here.
+  useEffect(() => {
+    if (!logs.length) return;
+    const raw = localStorage.getItem(STORAGE_KEYS.LAST_SAVED);
+    if (!raw) return;
+    localStorage.removeItem(STORAGE_KEYS.LAST_SAVED);
+    try {
+      const { id } = JSON.parse(raw) as { id: string };
+      const log = logs.find((l) => l.id === id);
+      if (!log) return;
+      setActiveTab('inicio');
+      setHighlightId(id);
+      setToast({ text: buildToastText(log, t), viewId: id });
+      setTimeout(() => setHighlightId((cur) => (cur === id ? null : cur)), 6000);
+      setTimeout(() => setToast((cur) => (cur?.viewId === id ? null : cur)), 8000);
+    } catch {
+      /* ignore malformed marker */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [logs]);
 
   const saveEdit = (updated: MealLog) => {
     const updatedLogs = logs.map((l) => (l.id === updated.id ? updated : l));
@@ -1769,6 +1956,9 @@ export default function DashboardPage() {
         onEdit={() => openMealEdit(log)}
         onDelete={() => setDeleteId(log.id)}
         onAsk={() => setChatLog(log)}
+        onEditAnalysis={() => setEditAnalysisLog(log)}
+        onAnswerClarify={() => setClarifyLog(log)}
+        highlight={highlightId === log.id}
         showDeleteConfirm={deleteId === log.id}
         onConfirmDelete={() => deleteLog(log.id)}
         onCancelDelete={() => setDeleteId(null)}
@@ -1823,6 +2013,34 @@ export default function DashboardPage() {
         <ChatSheet log={chatLog} profile={profile} logs={logs} onClose={() => setChatLog(null)} />
       )}
 
+      {editAnalysisLog?.analysis && profile && (
+        <AnalysisEditor
+          analysis={editAnalysisLog.analysis}
+          userAllergies={profile.allergies}
+          onSave={saveAnalysisEdit}
+          onClose={() => setEditAnalysisLog(null)}
+        />
+      )}
+
+      {clarifyLog?.analysis?.clarifyingQuestion && (
+        <ClarifySheet
+          question={clarifyLog.analysis.clarifyingQuestion}
+          onAnswer={submitClarify}
+          onClose={() => setClarifyLog(null)}
+        />
+      )}
+
+      {toast && (
+        <Toast
+          text={toast.text}
+          onView={() => {
+            setActiveTab('inicio');
+            setToast(null);
+          }}
+          onClose={() => setToast(null)}
+        />
+      )}
+
       {showAllergyModal && profile && (
         <EditAllergyModal
           profile={profile}
@@ -1831,7 +2049,20 @@ export default function DashboardPage() {
         />
       )}
       {editLog && editMode === 'meal' && (
-        <EditMealModal log={editLog} onSave={saveEdit} onClose={closeEdit} />
+        <EditMealModal
+          log={editLog}
+          onSave={saveEdit}
+          onClose={closeEdit}
+          onEditAnalysis={
+            editLog.analysis
+              ? () => {
+                  const target = editLog;
+                  closeEdit();
+                  setEditAnalysisLog(target);
+                }
+              : undefined
+          }
+        />
       )}
       {editLog && editMode === 'reaction' && (
         <EditReactionModal log={editLog} onSave={saveEdit} onClose={closeEdit} />
@@ -2077,35 +2308,10 @@ export default function DashboardPage() {
                   {t('home.noMealsToday')}
                 </p>
               ) : (
-                <div className="space-y-1">
-                  {todayLogs.map((log, index) => {
-                    const mealTypeInfo = log.mealType
-                      ? MEAL_TYPES.find((tp) => tp.value === log.mealType)
-                      : null;
-                    return (
-                      <button
-                        key={log.id}
-                        onClick={() => (log.hasReaction ? openReactionEdit(log) : openMealEdit(log))}
-                        className="press w-full flex items-center gap-3 py-2 px-2 -mx-2 rounded-xl text-left hover:bg-gray-50 dark:hover:bg-gray-800/60 animate-fade-slide-up"
-                        style={{ animationDelay: `${index * 0.04}s` }}
-                      >
-                        <span className="icon-tile w-12 h-12 bg-gray-100 dark:bg-gray-800 text-2xl flex-shrink-0 shadow-none">
-                          {log.hasReaction ? '⚡' : (mealTypeInfo?.icon ?? '🍽️')}
-                        </span>
-                        <span className="flex-1 text-sm font-medium text-gray-700 dark:text-gray-300 truncate">
-                          {log.mealName}
-                        </span>
-                        <span className="text-xs text-gray-400 dark:text-gray-500 flex-shrink-0">
-                          {getMealTime(log)}
-                        </span>
-                        <span
-                          className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
-                            log.hasReaction ? 'bg-red-500' : 'bg-green-500'
-                          }`}
-                        />
-                      </button>
-                    );
-                  })}
+                <div className="space-y-2">
+                  {todayLogs.map((log, index) =>
+                    log.hasReaction ? renderReaction(log, index) : renderMeal(log, index)
+                  )}
                 </div>
               )}
             </div>

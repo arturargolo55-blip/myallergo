@@ -205,6 +205,7 @@ const pt = {
   'risk.possible': 'Possível alérgeno',
   'risk.none_detected': 'Nenhum alérgeno detectado',
   'risk.none_detected.note': 'Nenhum alérgeno conhecido detectado nos ingredientes listados.',
+  'conf.stated': 'informado',
   'conf.label': 'rótulo',
   'conf.likely': 'provável',
   'conf.uncertain': 'incerto',
@@ -264,6 +265,20 @@ const pt = {
   'analysis.cancel': 'Cancelar',
   'analysis.retry': 'Tentar novamente',
   'analysis.backToEdit': 'Voltar para editar',
+  'analysis.clarifyChip': 'Responda 1 pergunta para melhorar a precisão',
+  'analysis.clarifyTitle': 'Melhorar a análise',
+  'analysis.editAnalysis': 'Editar análise',
+
+  // ── Editor (on-demand) ──
+  'editor.title': 'Editar análise',
+  'editor.amt': 'qtd',
+  'editor.unit': 'un.',
+  'review.range': 'Faixa',
+
+  // ── Save toast ──
+  'toast.saved': '{meal} salvo',
+  'toast.savedDetected': '{meal} salvo — {allergens} detectado',
+  'toast.view': 'Ver',
 };
 
 const en: typeof pt = {
@@ -471,6 +486,7 @@ const en: typeof pt = {
   'risk.possible': 'Possible allergen',
   'risk.none_detected': 'No allergen detected',
   'risk.none_detected.note': 'No known allergen detected in the listed ingredients.',
+  'conf.stated': 'stated',
   'conf.label': 'label',
   'conf.likely': 'likely',
   'conf.uncertain': 'uncertain',
@@ -530,6 +546,20 @@ const en: typeof pt = {
   'analysis.cancel': 'Cancel',
   'analysis.retry': 'Try again',
   'analysis.backToEdit': 'Back to edit',
+  'analysis.clarifyChip': 'Answer 1 question to improve accuracy',
+  'analysis.clarifyTitle': 'Improve the analysis',
+  'analysis.editAnalysis': 'Edit analysis',
+
+  // ── Editor (on-demand) ──
+  'editor.title': 'Edit analysis',
+  'editor.amt': 'amt',
+  'editor.unit': 'unit',
+  'review.range': 'Range',
+
+  // ── Save toast ──
+  'toast.saved': '{meal} saved',
+  'toast.savedDetected': '{meal} saved — {allergens} detected',
+  'toast.view': 'View',
 };
 
 export const translations: Record<Language, typeof pt> = { pt, en };

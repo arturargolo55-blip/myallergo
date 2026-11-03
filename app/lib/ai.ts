@@ -74,6 +74,7 @@ export async function requestMealAnalysis(
     photoDataUrl?: string;
     knownAllergies: string[]; // canonical IDs
     language: Language;
+    statedIngredients?: import('../types').AnalyzedIngredient[]; // user-edited items to keep on re-run
   },
   signal?: AbortSignal
 ): Promise<AnalyzeResult> {
@@ -98,6 +99,30 @@ export async function requestMealAnalysis(
     if (e instanceof DOMException && e.name === 'AbortError') return { error: 'aborted' };
     return { error: 'other' };
   }
+}
+
+/**
+ * Re-analyze an already-saved meal (e.g. after the user answers a clarifying question).
+ * Appends the answer to the description and, if the meal was user-edited, sends the edited
+ * ingredients as `stated` so the re-run keeps the user's corrections. Counts toward the
+ * daily limit (via requestMealAnalysis). Returns the fresh analysis; the caller persists it.
+ */
+export async function reanalyzeMeal(
+  log: MealLog,
+  answer: string,
+  knownAllergies: string[],
+  language: Language
+): Promise<AnalyzeResult> {
+  const description = [log.description?.trim(), answer.trim()].filter(Boolean).join('. ');
+  const statedIngredients = log.analysis?.userEdited ? log.analysis.ingredients : undefined;
+  return requestMealAnalysis({
+    mealName: log.mealName,
+    description,
+    photoDataUrl: log.photoUrl,
+    knownAllergies,
+    language,
+    statedIngredients,
+  });
 }
 
 function readLogs(): MealLog[] {

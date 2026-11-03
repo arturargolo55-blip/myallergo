@@ -235,7 +235,7 @@ export interface AllergenMatch {
   strength: MatchStrength;
 }
 
-export type IngredientInput = string | { name: string; confidence?: 'label' | 'likely' | 'uncertain' };
+export type IngredientInput = string | { name: string; confidence?: 'stated' | 'label' | 'likely' | 'uncertain' };
 
 function ingredientName(i: IngredientInput): string {
   return typeof i === 'string' ? i : i.name;
