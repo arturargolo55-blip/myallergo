@@ -85,6 +85,25 @@ button:active:not(:disabled) {
   background: transparent;
 }
 
+/* Markdown rendered in chat bubbles — compact, theme-consistent spacing */
+.chat-prose > :first-child { margin-top: 0; }
+.chat-prose > :last-child { margin-bottom: 0; }
+.chat-prose p { margin: 0.4em 0; line-height: 1.5; }
+.chat-prose ul, .chat-prose ol { margin: 0.4em 0; padding-left: 1.2em; }
+.chat-prose li { margin: 0.15em 0; }
+.chat-prose ul { list-style: disc; }
+.chat-prose ol { list-style: decimal; }
+.chat-prose strong { font-weight: 700; }
+.chat-prose em { font-style: italic; }
+.chat-prose code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85em;
+  background: rgb(0 0 0 / 0.06);
+  padding: 0.1em 0.35em;
+  border-radius: 0.35em;
+}
+.dark .chat-prose code { background: rgb(255 255 255 / 0.1); }
+
 /* Big, vivid icon tiles */
 .icon-tile {
   display: flex;

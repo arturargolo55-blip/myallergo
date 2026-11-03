@@ -1,19 +1,22 @@
-import { MealAnalysis, MealLog, PatternInsight, ReactionAnalysis, STORAGE_KEYS } from '../types';
-import { Language } from '../i18n/translations';
+import { MealAnalysis, MealLog, PatternInsight, ReactionAnalysis, STORAGE_KEYS, UserProfile } from '../types';
+import { Language, createT } from '../i18n/translations';
+import { CUSTOM_PREFIX } from './allergens';
 
-// ─── Daily usage limit ──────────────────────────────────────────────────────
-// Soft, client-side guard to avoid accidental cost blowups on one device.
-// TODO(auth): replace with a real server-side limit tied to user accounts once the
-// login step exists. This is NOT a security control — it can be bypassed trivially.
+// ─── Daily usage limits ───────────────────────────────────────────────────────
+// Soft, client-side guards to avoid accidental cost blowups on one device.
+// TODO(auth): replace with real server-side limits tied to user accounts once the
+// login step exists. These are NOT security controls — they can be bypassed trivially.
+// Separate counters so chat usage can never block meal analyses, and vice-versa.
 export const DAILY_ANALYSIS_LIMIT = 30;
+export const CHAT_DAILY_LIMIT = 40;
 
 function todayKey(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-export function getUsageToday(): number {
+function readDailyCount(storageKey: string): number {
   try {
-    const raw = localStorage.getItem(STORAGE_KEYS.USAGE);
+    const raw = localStorage.getItem(storageKey);
     if (!raw) return 0;
     const rec = JSON.parse(raw) as { date: string; count: number };
     return rec.date === todayKey() ? rec.count : 0;
@@ -22,17 +25,33 @@ export function getUsageToday(): number {
   }
 }
 
-export function analysesRemaining(): number {
-  return Math.max(0, DAILY_ANALYSIS_LIMIT - getUsageToday());
-}
-
-function incrementUsage() {
+function bumpDailyCount(storageKey: string) {
   try {
-    const count = getUsageToday() + 1;
-    localStorage.setItem(STORAGE_KEYS.USAGE, JSON.stringify({ date: todayKey(), count }));
+    const count = readDailyCount(storageKey) + 1;
+    localStorage.setItem(storageKey, JSON.stringify({ date: todayKey(), count }));
   } catch {
     /* ignore quota errors */
   }
+}
+
+export function getUsageToday(): number {
+  return readDailyCount(STORAGE_KEYS.USAGE);
+}
+export function analysesRemaining(): number {
+  return Math.max(0, DAILY_ANALYSIS_LIMIT - getUsageToday());
+}
+function incrementUsage() {
+  bumpDailyCount(STORAGE_KEYS.USAGE);
+}
+
+export function getChatUsageToday(): number {
+  return readDailyCount(STORAGE_KEYS.CHAT_USAGE);
+}
+export function chatRemaining(): number {
+  return Math.max(0, CHAT_DAILY_LIMIT - getChatUsageToday());
+}
+function incrementChatUsage() {
+  bumpDailyCount(STORAGE_KEYS.CHAT_USAGE);
 }
 
 export type AnalyzeError = 'missing_key' | 'limit' | 'invalid' | 'timeout' | 'other';
@@ -219,31 +238,105 @@ export function buildLogSummary(log: MealLog): string {
   return lines.join('\n');
 }
 
-export interface ChatResult {
-  reply?: string;
-  mealUpdate?: Partial<MealAnalysis>;
-  reactionUpdate?: Partial<ReactionAnalysis>;
-  error?: 'missing_key' | 'other';
+/** Localized allergen label for the context block (id → name, custom → text). */
+function allergenName(id: string, language: Language): string {
+  if (id.startsWith(CUSTOM_PREFIX)) return id.slice(CUSTOM_PREFIX.length);
+  return createT(language)('allergen.' + id);
 }
 
+const RECENT_HISTORY_DAYS = 30;
+const RECENT_HISTORY_MAX = 60;
+
+/**
+ * Compact, data-source-agnostic context for the chat. Takes already-loaded data
+ * (localStorage now; a database later — only the caller changes). Kept small to
+ * control token cost. Allergen WARNINGS still come from code, never the model.
+ */
+export function buildUserContext(params: {
+  profile: UserProfile;
+  currentLog: MealLog;
+  logs: MealLog[];
+  language: Language;
+}): string {
+  const { profile, currentLog, logs, language } = params;
+  const sections: string[] = [];
+
+  // USER
+  const allergyList = (profile.allergies ?? []).map((id) => `${id} (${allergenName(id, language)})`);
+  sections.push(
+    `USER PROFILE\n` +
+      `- Name: ${profile.name || '(unknown)'}\n` +
+      `- Registered allergies: ${allergyList.length ? allergyList.join(', ') : 'none'}`
+  );
+
+  // CURRENT ITEM (reuses buildLogSummary for the item detail)
+  sections.push(`CURRENT ITEM (the user is asking about this)\n${buildLogSummary(currentLog)}`);
+
+  // RECENT HISTORY — last 30 days, newest first, capped at 60 entries.
+  const cutoff = Date.now() - RECENT_HISTORY_DAYS * 24 * 60 * 60 * 1000;
+  const recent = [...logs]
+    .filter((l) => l.id !== currentLog.id && new Date(l.createdAt).getTime() >= cutoff)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, RECENT_HISTORY_MAX);
+  if (recent.length) {
+    const lines = recent.map((l) => {
+      const date = l.createdAt.slice(0, 10);
+      const name = (l.mealName || '').slice(0, 40);
+      if (l.hasReaction) {
+        const triggers = l.reactionAnalysis?.possibleTriggers?.join(', ');
+        return `- ${date} reaction "${name}"${l.reactionIntensity ? ` · ${l.reactionIntensity}` : ''}${
+          l.symptoms?.length ? ` · ${l.symptoms.join(', ')}` : ''
+        }${triggers ? ` · triggers: ${triggers}` : ''}`;
+      }
+      const ids = l.analysis ? analysisAllergenIds(l.analysis) : [];
+      return `- ${date} meal "${name}"${l.analysis?.riskLevel ? ` · risk ${l.analysis.riskLevel}` : ''}${
+        ids.length ? ` (${ids.join(', ')})` : ''
+      }`;
+    });
+    sections.push(`RECENT HISTORY (last ${RECENT_HISTORY_DAYS} days, newest first)\n${lines.join('\n')}`);
+  }
+
+  return sections.join('\n\n');
+}
+
+export type ChatError = 'missing_key' | 'limit' | 'other';
+
+export interface ChatResult {
+  reply?: string;
+  error?: ChatError;
+}
+
+/**
+ * Read-only chat. The chat can never modify stored data — it only returns text.
+ * Counts toward the separate chat daily limit. Sends only the last ~10 messages
+ * plus the compact user context (no photo).
+ */
 export async function askAI(
-  summary: string,
+  userContext: string,
   messages: ChatMessage[],
   language: Language,
-  opts: { photoDataUrl?: string; kind?: 'meal' | 'reaction' } = {}
+  opts: { kind?: 'meal' | 'reaction' } = {}
 ): Promise<ChatResult> {
+  if (chatRemaining() <= 0) return { error: 'limit' };
   try {
+    incrementChatUsage();
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ summary, messages, language, photoDataUrl: opts.photoDataUrl, kind: opts.kind }),
+      body: JSON.stringify({
+        userContext,
+        messages: messages.slice(-10), // control token cost
+        language,
+        kind: opts.kind,
+      }),
     });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
-      return { error: data?.error === 'missing_key' ? 'missing_key' : 'other' };
+      if (data?.error === 'missing_key') return { error: 'missing_key' };
+      return { error: 'other' };
     }
     const data = (await res.json()) as ChatResult;
-    return { reply: data.reply, mealUpdate: data.mealUpdate, reactionUpdate: data.reactionUpdate };
+    return { reply: data.reply };
   } catch {
     return { error: 'other' };
   }

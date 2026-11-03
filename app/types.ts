@@ -162,4 +162,6 @@ export const STORAGE_KEYS = {
   LOGS: 'allergy-tracker-logs',
   AI_INSIGHTS: 'allergy-tracker-ai-insights',
   USAGE: 'allergy-tracker-ai-usage',
+  CHAT_USAGE: 'allergy-tracker-ai-chat-usage',
+  CHATS: 'allergy-tracker-chats',
 } as const;

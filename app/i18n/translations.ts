@@ -159,10 +159,12 @@ const pt = {
   'ai.chat.empty': 'Faça uma pergunta sobre esta análise ou escolha uma sugestão:',
   'ai.chat.placeholder': 'Digite sua pergunta…',
   'ai.chat.send': 'Enviar',
+  'ai.chat.clear': 'Limpar conversa',
   'ai.chat.error': 'Não foi possível responder agora. Tente novamente.',
   'ai.chat.m1': 'Por que esses alérgenos?',
   'ai.chat.m2': 'Como deixar mais saudável?',
-  'ai.chat.m3': 'É seguro para minhas alergias?',
+  'ai.chat.m3': 'Quais dos meus alérgenos tem aqui?',
+  'ai.chat.m4': 'O que verificar antes de comer isto?',
   'ai.chat.r1': 'Por que esses gatilhos?',
   'ai.chat.r2': 'Isso é grave?',
   'ai.chat.r3': 'O que devo evitar?',
@@ -244,6 +246,11 @@ const pt = {
   // ── Day / All list toggle ──
   'list.byDay': 'Por dia',
   'list.all': 'Todas',
+
+  // ── Macro letters (fat = G for gordura in pt) ──
+  'macro.p': 'P',
+  'macro.c': 'C',
+  'macro.f': 'G',
 };
 
 const en: typeof pt = {
@@ -405,10 +412,12 @@ const en: typeof pt = {
   'ai.chat.empty': 'Ask a question about this analysis, or pick a suggestion:',
   'ai.chat.placeholder': 'Type your question…',
   'ai.chat.send': 'Send',
+  'ai.chat.clear': 'Clear conversation',
   'ai.chat.error': 'Could not answer right now. Please try again.',
   'ai.chat.m1': 'Why these allergens?',
   'ai.chat.m2': 'How can I make it healthier?',
-  'ai.chat.m3': 'Is it safe for my allergies?',
+  'ai.chat.m3': 'Which of my allergens are in this?',
+  'ai.chat.m4': 'What should I check before eating this?',
   'ai.chat.r1': 'Why these triggers?',
   'ai.chat.r2': 'Is this serious?',
   'ai.chat.r3': 'What should I avoid?',
@@ -490,6 +499,11 @@ const en: typeof pt = {
   // ── Day / All list toggle ──
   'list.byDay': 'By day',
   'list.all': 'All',
+
+  // ── Macro letters (fat = F in en) ──
+  'macro.p': 'P',
+  'macro.c': 'C',
+  'macro.f': 'F',
 };
 
 export const translations: Record<Language, typeof pt> = { pt, en };

@@ -1,165 +1,91 @@
 import { NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
+import { z } from 'zod';
 
 export const runtime = 'nodejs';
 
-const MODEL = 'claude-sonnet-4-6';
-const MAX_TURNS = 20; // guard against oversized histories
+// Model id from env (shared with analysis); default is a current, valid model.
+const MODEL = process.env.ANALYSIS_MODEL || 'claude-sonnet-4-6';
 
-interface ChatMessage {
-  role: 'user' | 'assistant';
-  content: string;
-}
+// NOTE: ANTHROPIC_API_KEY is read server-side only; never returned to the client.
+// The chat is READ-ONLY: it has no tools and cannot modify any stored data.
 
-type MediaType = 'image/jpeg' | 'image/png' | 'image/gif' | 'image/webp';
-
-function parseDataUrl(dataUrl: string): { media_type: MediaType; data: string } | null {
-  const match = /^data:(image\/(?:jpeg|png|gif|webp));base64,(.+)$/.exec(dataUrl);
-  if (!match) return null;
-  return { media_type: match[1] as MediaType, data: match[2] };
-}
-
-const UPDATE_MEAL_TOOL: Anthropic.Tool = {
-  name: 'update_meal_analysis',
-  description:
-    'Update the saved nutrition/allergen analysis for this meal. Call this ONLY when the user asks ' +
-    'you to correct it, or when — having now seen the photo — you can give a clearly better estimate. ' +
-    'Include only the fields that should change; omit the rest. After calling, briefly tell the user what changed.',
-  input_schema: {
-    type: 'object',
-    properties: {
-      calories: { type: 'integer', description: 'Updated total calories (kcal).' },
-      macros: {
-        type: 'object',
-        properties: {
-          protein_g: { type: 'number' },
-          carbs_g: { type: 'number' },
-          fat_g: { type: 'number' },
-        },
-        required: ['protein_g', 'carbs_g', 'fat_g'],
-      },
-      allergens: { type: 'array', items: { type: 'string' } },
-      ingredients: { type: 'array', items: { type: 'string' } },
-      confidence: { type: 'string', enum: ['low', 'medium', 'high'] },
-    },
-  },
-};
-
-const UPDATE_REACTION_TOOL: Anthropic.Tool = {
-  name: 'update_reaction_analysis',
-  description:
-    'Update the saved analysis for this allergic reaction. Call this ONLY when the user asks you to ' +
-    'correct it or when you can give a clearly better assessment. Include only the fields that should ' +
-    'change. After calling, briefly tell the user what changed.',
-  input_schema: {
-    type: 'object',
-    properties: {
-      assessment: { type: 'string' },
-      possibleTriggers: { type: 'array', items: { type: 'string' } },
-      urgency: { type: 'string', enum: ['routine', 'monitor', 'seek_care'] },
-      confidence: { type: 'string', enum: ['low', 'medium', 'high'] },
-    },
-  },
-};
+const BodyZ = z.object({
+  userContext: z.string().max(6000).default(''),
+  messages: z
+    .array(
+      z.object({
+        role: z.enum(['user', 'assistant']),
+        content: z.string().max(2000),
+      })
+    )
+    .max(10),
+  language: z.enum(['pt', 'en']).default('pt'),
+  kind: z.enum(['meal', 'reaction']).default('meal'),
+});
 
 export async function POST(request: Request) {
   if (!process.env.ANTHROPIC_API_KEY) {
-    return NextResponse.json(
-      { error: 'missing_key', message: 'ANTHROPIC_API_KEY is not configured.' },
-      { status: 503 }
-    );
+    return NextResponse.json({ error: 'missing_key', message: 'ANTHROPIC_API_KEY is not configured.' }, { status: 503 });
   }
 
-  let body: {
-    summary?: string;
-    messages?: ChatMessage[];
-    language?: string;
-    photoDataUrl?: string;
-    kind?: 'meal' | 'reaction';
-  };
+  let raw: unknown;
   try {
-    body = await request.json();
+    raw = await request.json();
   } catch {
     return NextResponse.json({ error: 'bad_request', message: 'Invalid JSON body.' }, { status: 400 });
   }
+  const parsed = BodyZ.safeParse(raw);
+  if (!parsed.success) {
+    return NextResponse.json({ error: 'bad_request', message: 'Invalid chat request.' }, { status: 400 });
+  }
 
-  const { summary = '', messages = [], language = 'pt', photoDataUrl, kind = 'meal' } = body;
-  const turns = messages
-    .filter((m) => (m.role === 'user' || m.role === 'assistant') && m.content?.trim())
-    .slice(-MAX_TURNS);
+  const { userContext, messages, language, kind } = parsed.data;
+  const turns = messages.filter((m) => m.content.trim());
   if (turns.length === 0 || turns[turns.length - 1].role !== 'user') {
     return NextResponse.json({ error: 'bad_request', message: 'Expected a trailing user message.' }, { status: 400 });
   }
 
   const client = new Anthropic();
   const langName = language === 'en' ? 'English' : 'Portuguese (Brazil)';
-  const tool = kind === 'reaction' ? UPDATE_REACTION_TOOL : UPDATE_MEAL_TOOL;
+  const itemWord = kind === 'reaction' ? 'reaction' : 'meal';
 
   const system =
-    `You are a helpful assistant inside a food-allergy tracking app. The user is asking follow-up ` +
-    `questions about one specific logged item and its AI analysis. Use this context to answer:\n\n` +
-    `${summary}\n\n` +
-    `Answer concisely and conversationally. You may explain the estimates, help interpret the reaction, ` +
-    `and suggest what to watch for. You can also UPDATE the saved analysis with the "${tool.name}" tool ` +
-    `when the user asks you to correct it, or when — having seen the photo — you can give a clearly ` +
-    `better estimate; include only the fields that change. You are NOT a doctor — for diagnosis or ` +
-    `treatment decisions, remind the user to consult an allergist. If a photo of the logged item is ` +
-    `included, use it when answering. Reply in ${langName}.`;
-
-  // Attach the logged photo (if any) to the first user turn so the model can see it.
-  const img = photoDataUrl ? parseDataUrl(photoDataUrl) : null;
-  const apiMessages: Anthropic.MessageParam[] = turns.map((m) => ({ role: m.role, content: m.content }));
-  if (img) {
-    const firstUser = apiMessages.find((m) => m.role === 'user');
-    if (firstUser) {
-      firstUser.content = [
-        { type: 'image', source: { type: 'base64', ...img } },
-        { type: 'text', text: typeof firstUser.content === 'string' ? firstUser.content : '' },
-      ];
-    }
-  }
+    `You are a careful assistant inside a food-allergy tracking app. Answer the user's questions ` +
+    `about their logged ${itemWord} using the context below. The app has already computed allergen ` +
+    `matches in code; TREAT "detected allergens" AS THE SOURCE OF TRUTH and never claim to change ` +
+    `any saved data (you cannot — you only answer in text).\n\n` +
+    `=== CONTEXT ===\n${userContext}\n=== END CONTEXT ===\n\n` +
+    `RULES:\n` +
+    `- NEVER say or imply a food is "safe", "allergen-free", or "fine to eat". If nothing matched, ` +
+    `say exactly: "No known allergen detected in the listed ingredients." (translated).\n` +
+    `- Base your answer on the user's REGISTERED allergies and the code-computed detected allergens. ` +
+    `Say explicitly which of THE USER'S allergies are matched and which are not.\n` +
+    `- Do not mention allergens that are not in the user's profile unless the user asks or it is ` +
+    `directly relevant as a caution.\n` +
+    `- Never diagnose or give medical advice. When unsure, say so and recommend checking the ` +
+    `product label or asking an allergist.\n` +
+    `- If you think an allergen may be missing, only SUGGEST it in words (e.g. "this may also ` +
+    `contain X — consider correcting the ingredients in the edit screen"). You cannot edit anything.\n` +
+    `- Keep it short, in ${langName}. Use short paragraphs or simple bullet lists. No tables. ` +
+    `No headings like "Is it safe?". Do not output links or URLs.`;
 
   try {
-    let response = await client.messages.create({
+    const response = await client.messages.create({
       model: MODEL,
       max_tokens: 1024,
       thinking: { type: 'adaptive' },
+      output_config: { effort: 'low' },
       system,
-      tools: [tool],
-      messages: apiMessages,
+      messages: turns.map((m) => ({ role: m.role, content: m.content })),
     });
-
-    let update: Record<string, unknown> | null = null;
-
-    // Single tool round-trip: if the model updates the analysis, capture it and
-    // feed a result back so it can produce a final confirmation message.
-    if (response.stop_reason === 'tool_use') {
-      const toolUse = response.content.find((b) => b.type === 'tool_use');
-      if (toolUse && toolUse.type === 'tool_use') {
-        update = toolUse.input as Record<string, unknown>;
-        apiMessages.push({ role: 'assistant', content: response.content });
-        apiMessages.push({
-          role: 'user',
-          content: [{ type: 'tool_result', tool_use_id: toolUse.id, content: 'Analysis updated.' }],
-        });
-        response = await client.messages.create({
-          model: MODEL,
-          max_tokens: 1024,
-          thinking: { type: 'adaptive' },
-          system,
-          tools: [tool],
-          messages: apiMessages,
-        });
-      }
-    }
 
     const textBlock = response.content.find((b) => b.type === 'text');
     const reply = textBlock && textBlock.type === 'text' ? textBlock.text : '';
-    return NextResponse.json({
-      reply,
-      ...(update && kind === 'meal' ? { mealUpdate: update } : {}),
-      ...(update && kind === 'reaction' ? { reactionUpdate: update } : {}),
-    });
+    if (!reply.trim()) {
+      return NextResponse.json({ error: 'server_error', message: 'Empty response.' }, { status: 502 });
+    }
+    return NextResponse.json({ reply });
   } catch (err) {
     if (err instanceof Anthropic.AuthenticationError) {
       return NextResponse.json({ error: 'auth', message: 'Invalid API key.' }, { status: 401 });

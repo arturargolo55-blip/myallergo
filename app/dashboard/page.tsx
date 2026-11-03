@@ -20,8 +20,11 @@ import {
 import { useTheme } from '../components/ThemeProvider';
 import { useLanguage } from '../components/LanguageProvider';
 import { Language, TFunction } from '../i18n/translations';
-import { analyzePatterns, analyzeReactionLog, askAI, buildLogSummary, ChatMessage } from '../lib/ai';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import { analyzePatterns, analyzeReactionLog, askAI, buildUserContext, ChatMessage } from '../lib/ai';
 import { ALLERGENS, CUSTOM_PREFIX, migrateAllergies, needsMigration } from '../lib/allergens';
+import { appendMessage, clearConversation, deleteConversation, loadConversation } from '../lib/chatStore';
 
 /** Localized allergen label: canonical IDs via i18n, custom entries as their text. */
 function allergenLabel(id: string, t: TFunction): string {
@@ -1209,8 +1212,8 @@ function MealAnalysisBadge({ log }: { log: MealLog }) {
         )}
         {a.macros && (
           <span className="text-xs text-gray-400 dark:text-gray-500">
-            · P {Math.round(a.macros.protein_g)}{t('ai.gram')} · C {Math.round(a.macros.carbs_g)}{t('ai.gram')} · G{' '}
-            {Math.round(a.macros.fat_g)}{t('ai.gram')}
+            · {t('macro.p')} {Math.round(a.macros.protein_g)}{t('ai.gram')} · {t('macro.c')}{' '}
+            {Math.round(a.macros.carbs_g)}{t('ai.gram')} · {t('macro.f')} {Math.round(a.macros.fat_g)}{t('ai.gram')}
             {a.macrosAreEstimate && <> · {t('review.estimate')}</>}
           </span>
         )}
@@ -1402,19 +1405,22 @@ function AIInsightsPanel({
 
 function ChatSheet({
   log,
+  profile,
+  logs,
   onClose,
-  onUpdate,
 }: {
   log: MealLog;
+  profile: UserProfile;
+  logs: MealLog[];
   onClose: () => void;
-  onUpdate: (update: { mealUpdate?: Partial<MealAnalysis>; reactionUpdate?: Partial<ReactionAnalysis> }) => void;
 }) {
   const { t, language } = useLanguage();
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>(() =>
+    loadConversation(log.id).map((m) => ({ role: m.role, content: m.text }))
+  );
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<'missing_key' | 'other' | null>(null);
-  const summary = useMemo(() => buildLogSummary(log), [log]);
+  const [error, setError] = useState<'missing_key' | 'limit' | 'other' | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -1423,29 +1429,39 @@ function ChatSheet({
 
   const suggestions = log.hasReaction
     ? [t('ai.chat.r1'), t('ai.chat.r2'), t('ai.chat.r3')]
-    : [t('ai.chat.m1'), t('ai.chat.m2'), t('ai.chat.m3')];
+    : [t('ai.chat.m1'), t('ai.chat.m2'), t('ai.chat.m3'), t('ai.chat.m4')];
+
+  const persist = (msg: ChatMessage) =>
+    appendMessage(log.id, { role: msg.role, text: msg.content, ts: new Date().toISOString() });
 
   const send = async (text: string) => {
     const trimmed = text.trim();
     if (!trimmed || loading) return;
-    const next: ChatMessage[] = [...messages, { role: 'user', content: trimmed }];
+    const userMsg: ChatMessage = { role: 'user', content: trimmed };
+    const next = [...messages, userMsg];
     setMessages(next);
+    persist(userMsg);
     setInput('');
     setLoading(true);
     setError(null);
-    const res = await askAI(summary, next, language, {
-      photoDataUrl: log.photoUrl,
-      kind: log.hasReaction ? 'reaction' : 'meal',
-    });
-    if (res.mealUpdate || res.reactionUpdate) {
-      onUpdate({ mealUpdate: res.mealUpdate, reactionUpdate: res.reactionUpdate });
-    }
+
+    const userContext = buildUserContext({ profile, currentLog: log, logs, language });
+    const res = await askAI(userContext, next, language, { kind: log.hasReaction ? 'reaction' : 'meal' });
+
     if (res.reply) {
-      setMessages([...next, { role: 'assistant', content: res.reply }]);
-    } else if (!res.mealUpdate && !res.reactionUpdate) {
+      const aiMsg: ChatMessage = { role: 'assistant', content: res.reply };
+      setMessages([...next, aiMsg]);
+      persist(aiMsg);
+    } else {
       setError(res.error ?? 'other');
     }
     setLoading(false);
+  };
+
+  const clearChat = () => {
+    clearConversation(log.id);
+    setMessages([]);
+    setError(null);
   };
 
   return (
@@ -1458,12 +1474,22 @@ function ChatSheet({
             </h2>
             <p className="text-xs text-gray-400 dark:text-gray-500 truncate">{log.mealName}</p>
           </div>
-          <button
-            onClick={onClose}
-            className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400 text-xl leading-none flex-shrink-0"
-          >
-            ×
-          </button>
+          <div className="flex items-center gap-1 flex-shrink-0">
+            {messages.length > 0 && (
+              <button
+                onClick={clearChat}
+                className="press text-xs font-medium text-gray-400 dark:text-gray-500 hover:text-red-500 px-2 py-1 rounded-lg"
+              >
+                {t('ai.chat.clear')}
+              </button>
+            )}
+            <button
+              onClick={onClose}
+              className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 dark:text-gray-400 text-xl leading-none"
+            >
+              ×
+            </button>
+          </div>
         </div>
 
         <div ref={scrollRef} className="flex-1 overflow-y-auto space-y-3 py-2 min-h-[160px]">
@@ -1486,15 +1512,20 @@ function ChatSheet({
 
           {messages.map((m, i) => (
             <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              <div
-                className={`max-w-[85%] text-sm rounded-2xl px-3.5 py-2 whitespace-pre-wrap ${
-                  m.role === 'user'
-                    ? 'bg-green-500 text-white rounded-br-sm'
-                    : 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200 rounded-bl-sm'
-                }`}
-              >
-                {m.content}
-              </div>
+              {m.role === 'user' ? (
+                <div className="max-w-[85%] text-sm rounded-2xl rounded-br-sm px-3.5 py-2 whitespace-pre-wrap bg-green-500 text-white">
+                  {m.content}
+                </div>
+              ) : (
+                <div className="chat-prose max-w-[85%] text-sm rounded-2xl rounded-bl-sm px-3.5 py-2 bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200">
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    components={{ a: ({ children }) => <>{children}</> }}
+                  >
+                    {m.content}
+                  </ReactMarkdown>
+                </div>
+              )}
             </div>
           ))}
 
@@ -1507,6 +1538,7 @@ function ChatSheet({
           )}
 
           {error === 'missing_key' && <p className="text-sm text-amber-600 dark:text-amber-500">{t('ai.unavailable')}</p>}
+          {error === 'limit' && <p className="text-sm text-amber-600 dark:text-amber-500">{t('ai.limitReached')}</p>}
           {error === 'other' && <p className="text-sm text-red-500">{t('ai.chat.error')}</p>}
         </div>
 
@@ -1617,6 +1649,8 @@ export default function DashboardPage() {
     const updated = logs.filter((l) => l.id !== id);
     setLogs(updated);
     localStorage.setItem(STORAGE_KEYS.LOGS, JSON.stringify(updated));
+    deleteConversation(id); // remove the meal's chat history with the meal
+    if (chatLog?.id === id) setChatLog(null);
     setDeleteId(null);
   };
 
@@ -1655,47 +1689,6 @@ export default function DashboardPage() {
       setPatternError(result.error ?? 'other');
     }
     setPatternLoading(false);
-  };
-
-  // Apply an analysis correction the chat produced, persisting it to the log.
-  const applyAnalysisUpdate = (
-    id: string,
-    update: { mealUpdate?: Partial<MealAnalysis>; reactionUpdate?: Partial<ReactionAnalysis> }
-  ) => {
-    const now = new Date().toISOString();
-    const updated = logs.map((l) => {
-      if (l.id !== id) return l;
-      if (update.mealUpdate) {
-        const base: MealAnalysis = l.analysis ?? {
-          sourceType: 'text',
-          macrosAreEstimate: true,
-          detectedAllergens: [],
-          riskLevel: 'none_detected',
-          userEdited: false,
-          analyzedAt: now,
-        };
-        return { ...l, analysis: { ...base, ...update.mealUpdate, analyzedAt: now }, analysisStatus: 'done' as const };
-      }
-      if (update.reactionUpdate) {
-        const base: ReactionAnalysis = l.reactionAnalysis ?? {
-          assessment: '',
-          possibleTriggers: [],
-          urgency: 'routine',
-          confidence: 'medium',
-          analyzedAt: now,
-        };
-        return {
-          ...l,
-          reactionAnalysis: { ...base, ...update.reactionUpdate, analyzedAt: now },
-          reactionAnalysisStatus: 'done' as const,
-        };
-      }
-      return l;
-    });
-    setLogs(updated);
-    localStorage.setItem(STORAGE_KEYS.LOGS, JSON.stringify(updated));
-    const newLog = updated.find((l) => l.id === id) ?? null;
-    setChatLog((prev) => (prev && prev.id === id ? newLog : prev));
   };
 
   const saveAllergies = (newAllergies: string[]) => {
@@ -1815,12 +1808,8 @@ export default function DashboardPage() {
         <LogReactionModal onSave={addLog} onClose={() => setShowLogReactionModal(false)} />
       )}
 
-      {chatLog && (
-        <ChatSheet
-          log={chatLog}
-          onClose={() => setChatLog(null)}
-          onUpdate={(u) => applyAnalysisUpdate(chatLog.id, u)}
-        />
+      {chatLog && profile && (
+        <ChatSheet log={chatLog} profile={profile} logs={logs} onClose={() => setChatLog(null)} />
       )}
 
       {showAllergyModal && profile && (
