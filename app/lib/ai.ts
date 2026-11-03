@@ -54,7 +54,7 @@ function incrementChatUsage() {
   bumpDailyCount(STORAGE_KEYS.CHAT_USAGE);
 }
 
-export type AnalyzeError = 'missing_key' | 'limit' | 'invalid' | 'timeout' | 'other';
+export type AnalyzeError = 'missing_key' | 'limit' | 'invalid' | 'timeout' | 'aborted' | 'other';
 
 export interface AnalyzeResult {
   analysis?: MealAnalysis;
@@ -62,28 +62,29 @@ export interface AnalyzeResult {
 }
 
 /**
- * Synchronous (awaited) meal analysis for the inline Review-before-Save flow.
- * Does NOT touch localStorage — the log isn't saved yet; the caller shows the result
- * in an editable review and persists the corrected version.
+ * Fetch-only meal analysis (the model call) for the inline Review-before-Save flow.
+ * The CALLER owns cancellation/timeout via `signal` so the UI can drive a progress
+ * view and a Cancel button. Still enforces the daily limit and counts usage here.
+ * Does NOT touch the logs in localStorage — the log isn't saved yet.
  */
-export async function analyzeMealInline(params: {
-  mealName: string;
-  description?: string;
-  photoDataUrl?: string;
-  knownAllergies: string[]; // canonical IDs
-  language: Language;
-}): Promise<AnalyzeResult> {
+export async function requestMealAnalysis(
+  params: {
+    mealName: string;
+    description?: string;
+    photoDataUrl?: string;
+    knownAllergies: string[]; // canonical IDs
+    language: Language;
+  },
+  signal?: AbortSignal
+): Promise<AnalyzeResult> {
   if (analysesRemaining() <= 0) return { error: 'limit' };
-
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 35000);
   try {
     incrementUsage(); // count the attempt (we're about to spend an API call)
     const res = await fetch('/api/analyze-meal', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(params),
-      signal: controller.signal,
+      signal,
     });
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
@@ -94,10 +95,8 @@ export async function analyzeMealInline(params: {
     const analysis = (await res.json()) as MealAnalysis;
     return { analysis };
   } catch (e) {
-    if (e instanceof DOMException && e.name === 'AbortError') return { error: 'timeout' };
+    if (e instanceof DOMException && e.name === 'AbortError') return { error: 'aborted' };
     return { error: 'other' };
-  } finally {
-    clearTimeout(timer);
   }
 }
 

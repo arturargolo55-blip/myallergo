@@ -15,11 +15,29 @@ import {
 } from '../types';
 import { useLanguage } from '../components/LanguageProvider';
 import { TFunction } from '../i18n/translations';
-import { analyzeReactionLog, analyzeMealInline, analysesRemaining, AnalyzeError } from '../lib/ai';
-import { crossCheckAllergens, computeRiskLevel, CUSTOM_PREFIX, migrateAllergies, needsMigration } from '../lib/allergens';
+import { analyzeReactionLog, requestMealAnalysis, analysesRemaining, AnalyzeError } from '../lib/ai';
+import {
+  crossCheckAllergens,
+  computeRiskLevel,
+  CUSTOM_PREFIX,
+  migrateAllergies,
+  needsMigration,
+} from '../lib/allergens';
 import { compressImage } from '../lib/image';
 
 const MAX_IMAGE_SIZE_MB = 12; // generous: we downscale/compress client-side before upload
+const ANALYSIS_TIMEOUT_MS = 30000;
+const SLOW_NOTE_AFTER_S = 15;
+
+type StepId = 'prepare' | 'model' | 'crosscheck' | 'build';
+type StepState = 'pending' | 'active' | 'done' | 'failed';
+const STEP_ORDER: StepId[] = ['prepare', 'model', 'crosscheck', 'build'];
+const freshSteps = (): Record<StepId, StepState> => ({
+  prepare: 'pending',
+  model: 'pending',
+  crosscheck: 'pending',
+  build: 'pending',
+});
 
 function getCurrentTime(): string {
   const now = new Date();
@@ -41,7 +59,8 @@ export default function LogPage() {
   const [mealTime, setMealTime] = useState<string>('');
   const [mealName, setMealName] = useState('');
   const [description, setDescription] = useState('');
-  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null); // object URL for the thumbnail
   const [photoError, setPhotoError] = useState('');
   const [hasReaction, setHasReaction] = useState(false);
   const [symptoms, setSymptoms] = useState<string[]>([]);
@@ -52,6 +71,15 @@ export default function LogPage() {
   const [phase, setPhase] = useState<'form' | 'analyzing' | 'review'>('form');
   const [analysis, setAnalysis] = useState<MealAnalysis | null>(null);
   const [analyzeError, setAnalyzeError] = useState<AnalyzeError | null>(null);
+  const [steps, setSteps] = useState<Record<StepId, StepState>>(freshSteps);
+  const [elapsedSec, setElapsedSec] = useState(0);
+
+  // Compression cache + analysis control (refs so they survive re-renders).
+  const compressedRef = useRef<string | null>(null); // compressed JPEG dataURL for the current file
+  const abortRef = useRef<AbortController | null>(null);
+  const timedOutRef = useRef(false);
+  const cancelledRef = useRef(false);
+  const elapsedTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     const raw = localStorage.getItem(STORAGE_KEYS.PROFILE);
@@ -68,7 +96,7 @@ export default function LogPage() {
     setMealTime(getCurrentTime());
   }, [router]);
 
-  const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const sizeMB = file.size / (1024 * 1024);
@@ -77,10 +105,31 @@ export default function LogPage() {
       return;
     }
     setPhotoError('');
-    // Downscale to <=1024px + JPEG compress before storing/sending (cost + speed).
-    const dataUrl = await compressImage(file, 1024, 0.8);
-    setPhotoUrl(dataUrl);
+    // Keep the raw file; actual compression happens at analyze/save time (honest "prepare" step).
+    compressedRef.current = null;
+    if (photoPreview) URL.revokeObjectURL(photoPreview);
+    setPhotoFile(file);
+    setPhotoPreview(URL.createObjectURL(file));
   };
+
+  const clearPhoto = () => {
+    if (photoPreview) URL.revokeObjectURL(photoPreview);
+    setPhotoFile(null);
+    setPhotoPreview(null);
+    compressedRef.current = null;
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  // Compress the selected photo once (cached). Returns undefined when there's no photo.
+  const ensurePhotoData = async (): Promise<string | undefined> => {
+    if (!photoFile) return undefined;
+    if (compressedRef.current) return compressedRef.current;
+    const dataUrl = await compressImage(photoFile, 1024, 0.8);
+    compressedRef.current = dataUrl;
+    return dataUrl;
+  };
+
+  useEffect(() => () => { if (photoPreview) URL.revokeObjectURL(photoPreview); }, [photoPreview]);
 
   const toggleSymptom = (symptom: string) => {
     setSymptoms((prev) => (prev.includes(symptom) ? prev.filter((s) => s !== symptom) : [...prev, symptom]));
@@ -104,11 +153,11 @@ export default function LogPage() {
     }
   };
 
-  const baseLog = (): MealLog => ({
+  const buildLog = (photoData: string | undefined): MealLog => ({
     id: Date.now().toString(),
     mealName: mealName.trim(),
     description: description.trim(),
-    photoUrl: photoUrl || undefined,
+    photoUrl: photoData,
     hasReaction,
     symptoms: hasReaction ? symptoms : [],
     mealType: mealType || undefined,
@@ -116,59 +165,157 @@ export default function LogPage() {
     createdAt: new Date().toISOString(),
   });
 
-  // Reaction path (unchanged): save instantly + background reaction analysis.
-  const handleSaveReaction = () => {
+  // Reaction path (unchanged behavior): save instantly + background reaction analysis.
+  const handleSaveReaction = async () => {
     const errs = validate();
     if (Object.keys(errs).length) {
       setErrors(errs);
       return;
     }
     setSaving(true);
-    const log: MealLog = { ...baseLog(), reactionAnalysisStatus: 'pending' };
+    const photoData = await ensurePhotoData();
+    const log: MealLog = { ...buildLog(photoData), reactionAnalysisStatus: 'pending' };
     void analyzeReactionLog(log, profile?.allergies ?? [], language);
     persistAndGo(log);
   };
 
-  // Meal path: run analysis, then show an editable review before saving.
+  const setStep = (id: StepId, state: StepState) => setSteps((prev) => ({ ...prev, [id]: state }));
+
+  const stopElapsed = () => {
+    if (elapsedTimerRef.current) clearInterval(elapsedTimerRef.current);
+    elapsedTimerRef.current = null;
+  };
+
+  // Merge the code-driven allergen cross-check exactly like the server route does,
+  // but run it client-side so the "Checking against your allergies" step is real.
+  const computeMatches = (a: MealAnalysis): AllergenMatch[] => {
+    const ids = profile?.allergies ?? [];
+    const fromIngredients = crossCheckAllergens(a.ingredients ?? [], ids);
+    const fromTraces = crossCheckAllergens(a.traces ?? [], ids, { baseStrength: 'possible' });
+    const fromHidden = crossCheckAllergens(a.possibleHiddenAllergens ?? [], ids, { baseStrength: 'possible' });
+    const best = new Map<string, AllergenMatch>();
+    for (const m of [...fromIngredients, ...fromTraces, ...fromHidden]) {
+      const key = `${m.allergenId}::${m.ingredient.toLowerCase()}`;
+      const prev = best.get(key);
+      if (!prev || (prev.strength === 'possible' && m.strength === 'match')) best.set(key, m);
+    }
+    return [...best.values()];
+  };
+
+  // Meal path: full-screen phased progress, then the editable review.
   const runAnalysis = async (extraDescription?: string) => {
+    if (phase === 'analyzing') return; // double-submit guard
     const errs = validate();
     if (Object.keys(errs).length) {
       setErrors(errs);
       return;
     }
     setAnalyzeError(null);
+    setSteps(freshSteps());
+    setElapsedSec(0);
+    cancelledRef.current = false;
+    timedOutRef.current = false;
     setPhase('analyzing');
+
+    // 1) Preparing the photo (real client-side compression).
+    setStep('prepare', 'active');
+    const photoData = await ensurePhotoData();
+    if (cancelledRef.current) return;
+    setStep('prepare', 'done');
+
+    // 2) Reading the meal with AI (the model call) — caller owns cancel + timeout.
+    setStep('model', 'active');
+    const controller = new AbortController();
+    abortRef.current = controller;
+    stopElapsed();
+    const startedAt = Date.now();
+    elapsedTimerRef.current = setInterval(() => setElapsedSec(Math.floor((Date.now() - startedAt) / 1000)), 1000);
+    const timeout = setTimeout(() => {
+      timedOutRef.current = true;
+      controller.abort();
+    }, ANALYSIS_TIMEOUT_MS);
+
     const desc = [description.trim(), extraDescription?.trim()].filter(Boolean).join('. ');
-    const res = await analyzeMealInline({
-      mealName: mealName.trim(),
-      description: desc,
-      photoDataUrl: photoUrl || undefined,
-      knownAllergies: profile?.allergies ?? [],
-      language,
-    });
-    if (res.analysis) {
-      setAnalysis(res.analysis);
-      setPhase('review');
-    } else {
-      setAnalyzeError(res.error ?? 'other');
-      setPhase('form');
+    const res = await requestMealAnalysis(
+      { mealName: mealName.trim(), description: desc, photoDataUrl: photoData, knownAllergies: profile?.allergies ?? [], language },
+      controller.signal
+    );
+    clearTimeout(timeout);
+    stopElapsed();
+    abortRef.current = null;
+
+    if (cancelledRef.current) return; // user cancelled → already back on the form
+
+    if (!res.analysis) {
+      setStep('model', 'failed');
+      setAnalyzeError(timedOutRef.current ? 'timeout' : res.error ?? 'other');
+      return; // stay on the progress screen with recovery actions
     }
+    setStep('model', 'done');
+
+    // 3) Checking against the user's allergies (lib/allergens cross-check, client-side).
+    setStep('crosscheck', 'active');
+    const matches = computeMatches(res.analysis);
+    setStep('crosscheck', 'done');
+
+    // 4) Building the result.
+    setStep('build', 'active');
+    const finalAnalysis: MealAnalysis = { ...res.analysis, detectedAllergens: matches, riskLevel: computeRiskLevel(matches) };
+    setStep('build', 'done');
+
+    setAnalysis(finalAnalysis);
+    setPhase('review');
   };
 
-  const saveMealWithoutAnalysis = () => {
+  const cancelAnalysis = () => {
+    cancelledRef.current = true;
+    abortRef.current?.abort();
+    stopElapsed();
+    setAnalyzeError(null);
+    setPhase('form'); // inputs are untouched
+  };
+
+  const backToEdit = () => {
+    stopElapsed();
+    setAnalyzeError(null);
+    setPhase('form');
+  };
+
+  const saveMealWithoutAnalysis = async () => {
     const errs = validate();
     if (Object.keys(errs).length) {
       setErrors(errs);
+      setPhase('form');
       return;
     }
     setSaving(true);
-    persistAndGo(baseLog());
+    const photoData = await ensurePhotoData();
+    persistAndGo(buildLog(photoData));
   };
 
-  const confirmReview = (finalAnalysis: MealAnalysis) => {
+  const confirmReview = async (finalAnalysis: MealAnalysis) => {
     setSaving(true);
-    persistAndGo({ ...baseLog(), analysis: finalAnalysis, analysisStatus: 'done' });
+    const photoData = await ensurePhotoData();
+    persistAndGo({ ...buildLog(photoData), analysis: finalAnalysis, analysisStatus: 'done' });
   };
+
+  // Warn on tab close / browser back while analyzing; cancel on back.
+  useEffect(() => {
+    if (phase !== 'analyzing') return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    const onPopState = () => cancelAnalysis();
+    window.addEventListener('beforeunload', onBeforeUnload);
+    window.history.pushState(null, '', window.location.href);
+    window.addEventListener('popstate', onPopState);
+    return () => {
+      window.removeEventListener('beforeunload', onBeforeUnload);
+      window.removeEventListener('popstate', onPopState);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase]);
 
   if (!profile) return null;
 
@@ -176,6 +323,21 @@ export default function LogPage() {
 
   return (
     <div className="min-h-screen app-bg">
+      {phase === 'analyzing' && (
+        <AnalysisProgress
+          mealName={mealName.trim()}
+          photoPreview={photoPreview}
+          steps={steps}
+          elapsedSec={elapsedSec}
+          error={analyzeError}
+          t={t}
+          onCancel={cancelAnalysis}
+          onRetry={() => runAnalysis()}
+          onBackToEdit={backToEdit}
+          onSaveWithout={saveMealWithoutAnalysis}
+        />
+      )}
+
       {phase === 'review' && analysis && (
         <ReviewPanel
           analysis={analysis}
@@ -270,15 +432,12 @@ export default function LogPage() {
         <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 p-5 animate-fade-slide-up" style={{ animationDelay: '0.15s' }}>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">{t('log.photoLabel')}</label>
 
-          {photoUrl ? (
+          {photoPreview ? (
             <div className="relative rounded-xl overflow-hidden">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={photoUrl} alt={t('log.photoLabel')} className="w-full h-52 object-cover" />
+              <img src={photoPreview} alt={t('log.photoLabel')} className="w-full h-52 object-cover" />
               <button
-                onClick={() => {
-                  setPhotoUrl(null);
-                  if (fileInputRef.current) fileInputRef.current.value = '';
-                }}
+                onClick={clearPhoto}
                 className="absolute top-2 right-2 w-8 h-8 bg-black/50 hover:bg-black/70 text-white rounded-full flex items-center justify-center text-sm font-bold"
               >
                 ×
@@ -380,9 +539,7 @@ export default function LogPage() {
                 disabled={saving || phase === 'analyzing'}
                 className="cta-green press w-full disabled:opacity-60 text-white font-bold text-base py-4 rounded-2xl flex items-center justify-center gap-2.5"
               >
-                {phase === 'analyzing' ? (
-                  <span className="animate-pulse">{t('ai.analyzing')}</span>
-                ) : overLimit ? (
+                {overLimit ? (
                   <><span className="text-xl">💾</span> {t('log.save')}</>
                 ) : (
                   <><span className="text-xl">✨</span> {t('log.analyzeReview')}</>
@@ -398,6 +555,150 @@ export default function LogPage() {
                 </button>
               )}
             </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── AnalysisProgress: full-screen phased progress view ─────────────────────────
+
+function StepIcon({ state }: { state: StepState }) {
+  if (state === 'done')
+    return <span className="w-6 h-6 rounded-full bg-green-500 text-white flex items-center justify-center text-xs flex-shrink-0">✓</span>;
+  if (state === 'failed')
+    return <span className="w-6 h-6 rounded-full bg-red-500 text-white flex items-center justify-center text-xs flex-shrink-0">✕</span>;
+  if (state === 'active')
+    return (
+      <span className="w-6 h-6 rounded-full border-2 border-green-500 border-t-transparent motion-safe:animate-spin flex-shrink-0" aria-hidden />
+    );
+  return <span className="w-6 h-6 rounded-full border-2 border-gray-300 dark:border-gray-600 flex-shrink-0" aria-hidden />;
+}
+
+function AnalysisProgress({
+  mealName,
+  photoPreview,
+  steps,
+  elapsedSec,
+  error,
+  t,
+  onCancel,
+  onRetry,
+  onBackToEdit,
+  onSaveWithout,
+}: {
+  mealName: string;
+  photoPreview: string | null;
+  steps: Record<StepId, StepState>;
+  elapsedSec: number;
+  error: AnalyzeError | null;
+  t: TFunction;
+  onCancel: () => void;
+  onRetry: () => void;
+  onBackToEdit: () => void;
+  onSaveWithout: () => void;
+}) {
+  const errorMessage = (e: AnalyzeError): string => {
+    if (e === 'missing_key') return t('ai.unavailable');
+    if (e === 'limit') return t('ai.limitReached');
+    if (e === 'timeout') return t('ai.timeout');
+    return t('ai.analyzeError');
+  };
+
+  const activeStep = STEP_ORDER.find((id) => steps[id] === 'active');
+  const slow = steps.model === 'active' && elapsedSec >= SLOW_NOTE_AFTER_S;
+  // Screen-reader announcement for the current state change.
+  const announce = error
+    ? errorMessage(error)
+    : activeStep
+    ? `${t('analysis.step.' + activeStep)} — ${t('analysis.state.active')}`
+    : '';
+
+  return (
+    <div className="fixed inset-0 z-50 bg-white dark:bg-gray-950 overflow-y-auto animate-fade-in">
+      <div className="min-h-full max-w-lg mx-auto px-5 py-8 flex flex-col">
+        {/* Header: photo + meal name */}
+        <div className="flex items-center gap-3 mb-6">
+          {photoPreview && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={photoPreview} alt="" className="w-14 h-14 rounded-xl object-cover border border-gray-200 dark:border-gray-700 flex-shrink-0" />
+          )}
+          <div className="min-w-0">
+            <p className="text-xs text-gray-400 dark:text-gray-500">{t('analysis.title')}</p>
+            <h1 className="text-lg font-bold text-gray-900 dark:text-gray-100 truncate">{mealName}</h1>
+          </div>
+        </div>
+
+        {/* Vertical stepper */}
+        <ol className="space-y-4 flex-1">
+          {STEP_ORDER.map((id) => {
+            const state = steps[id];
+            return (
+              <li key={id} className="flex items-start gap-3">
+                <StepIcon state={state} />
+                <div className="flex-1 min-w-0 pt-0.5">
+                  <p
+                    className={`text-sm font-medium ${
+                      state === 'pending'
+                        ? 'text-gray-400 dark:text-gray-500'
+                        : state === 'failed'
+                        ? 'text-red-600 dark:text-red-400'
+                        : 'text-gray-900 dark:text-gray-100'
+                    }`}
+                  >
+                    {t('analysis.step.' + id)}
+                  </p>
+                  {id === 'model' && state === 'active' && (
+                    <div className="mt-2 space-y-1.5">
+                      <div className="h-1.5 rounded-full bg-gray-200 dark:bg-gray-700 overflow-hidden">
+                        <div className="indeterminate-bar h-full w-1/3 rounded-full bg-green-500" />
+                      </div>
+                      <p className="text-xs text-gray-400 dark:text-gray-500 tabular-nums">{elapsedSec}s</p>
+                      {slow && <p className="text-xs text-amber-600 dark:text-amber-500">{t('analysis.slow')}</p>}
+                    </div>
+                  )}
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+
+        {/* aria-live announcement (visually hidden) */}
+        <p aria-live="polite" className="sr-only">
+          {announce}
+        </p>
+
+        {/* Footer: error recovery or cancel */}
+        <div className="mt-8">
+          {error ? (
+            <div className="space-y-3">
+              <p className="text-sm text-amber-600 dark:text-amber-500">{errorMessage(error)}</p>
+              <button onClick={onRetry} className="cta-green press w-full text-white font-semibold py-3.5 rounded-2xl">
+                {t('analysis.retry')}
+              </button>
+              <div className="flex gap-3">
+                <button
+                  onClick={onBackToEdit}
+                  className="flex-1 py-3 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800"
+                >
+                  {t('analysis.backToEdit')}
+                </button>
+                <button
+                  onClick={onSaveWithout}
+                  className="flex-1 py-3 rounded-xl border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 text-sm font-medium hover:bg-gray-50 dark:hover:bg-gray-800"
+                >
+                  {t('log.saveWithout')}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={onCancel}
+              className="press w-full py-3.5 rounded-2xl border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 text-sm font-semibold hover:bg-gray-50 dark:hover:bg-gray-800"
+            >
+              {t('analysis.cancel')}
+            </button>
           )}
         </div>
       </div>

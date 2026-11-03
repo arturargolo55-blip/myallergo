@@ -252,6 +252,18 @@ const pt = {
   'macro.p': 'P',
   'macro.c': 'C',
   'macro.f': 'G',
+
+  // ── Analysis progress screen ──
+  'analysis.title': 'Analisando sua refeição',
+  'analysis.step.prepare': 'Preparando a foto',
+  'analysis.step.model': 'Lendo a refeição com IA',
+  'analysis.step.crosscheck': 'Verificando suas alergias',
+  'analysis.step.build': 'Montando seu resultado',
+  'analysis.state.active': 'em andamento',
+  'analysis.slow': 'Ainda processando — fotos podem demorar um pouco mais.',
+  'analysis.cancel': 'Cancelar',
+  'analysis.retry': 'Tentar novamente',
+  'analysis.backToEdit': 'Voltar para editar',
 };
 
 const en: typeof pt = {
@@ -506,6 +518,18 @@ const en: typeof pt = {
   'macro.p': 'P',
   'macro.c': 'C',
   'macro.f': 'F',
+
+  // ── Analysis progress screen ──
+  'analysis.title': 'Analyzing your meal',
+  'analysis.step.prepare': 'Preparing the photo',
+  'analysis.step.model': 'Reading the meal with AI',
+  'analysis.step.crosscheck': 'Checking against your allergies',
+  'analysis.step.build': 'Building your result',
+  'analysis.state.active': 'in progress',
+  'analysis.slow': 'Still working — photos can take a bit longer.',
+  'analysis.cancel': 'Cancel',
+  'analysis.retry': 'Try again',
+  'analysis.backToEdit': 'Back to edit',
 };
 
 export const translations: Record<Language, typeof pt> = { pt, en };
