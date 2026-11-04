@@ -80,11 +80,31 @@ export interface CalorieRange {
   reason?: string;
 }
 
-/** One short question (user's language) with optional quick-pick answers. */
+/** Fixed set of things the model may ask about (stable ids, language-agnostic). */
+export type ClarifyingQuestionId = 'added_fat_amount' | 'portion_size' | 'sauce_type' | 'cooking_method';
+export const CLARIFYING_QUESTION_IDS: ClarifyingQuestionId[] = [
+  'added_fat_amount',
+  'portion_size',
+  'sauce_type',
+  'cooking_method',
+];
+
+/** One short question (user's language) with a stable id and optional quick-pick answers. */
 export interface ClarifyingQuestion {
-  question: string;
+  id: ClarifyingQuestionId;
+  text: string;
   options?: string[];
 }
+
+/** A question the user has already answered (kept on the meal so it's never re-asked). */
+export interface Clarification {
+  id: ClarifyingQuestionId;
+  question: string;
+  answer: string;
+  ts: string;
+}
+
+export const MAX_CLARIFY_ROUNDS = 2;
 
 export interface MealAnalysis {
   /** Whether the photo/input was a packaged-food label, a plate of food, or text only. */
@@ -102,6 +122,14 @@ export interface MealAnalysis {
   possibleHiddenAllergens?: string[];
   /** Model's clarifying question (user's language), with optional quick-pick options. */
   clarifyingQuestion?: ClarifyingQuestion;
+  /** Questions the user has already answered — never re-ask these. */
+  clarifications?: Clarification[];
+  /** User tapped "Not now" — don't show a chip again unless re-analyzed from scratch. */
+  clarifyDismissed?: boolean;
+  /** Fraction of added cooking fat that ends up in the food (rest stays in the pan). */
+  absorbedFraction?: number;
+  /** Short note when the code sanity-check widened the calorie range. */
+  calorieNote?: string;
   /** Code-generated allergen warnings cross-checked against the user's allergy IDs. */
   detectedAllergens: AllergenMatch[];
   riskLevel: RiskLevel;

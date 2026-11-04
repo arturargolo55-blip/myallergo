@@ -6,8 +6,9 @@ import {
   MEAL_OUTPUT_JSON_SCHEMA,
   buildMealAnalysis,
   mergeStatedIngredients,
+  applyCalorieSanity,
 } from '../../lib/analysis';
-import type { AnalyzedIngredient, MealAnalysis } from '../../types';
+import type { AnalyzedIngredient, Clarification, MealAnalysis } from '../../types';
 
 export const runtime = 'nodejs';
 export const maxDuration = 45;
@@ -37,6 +38,7 @@ export async function POST(request: Request) {
     knownAllergies?: string[]; // canonical IDs
     language?: string;
     statedIngredients?: AnalyzedIngredient[]; // user-edited items to keep (re-run)
+    clarifications?: Clarification[]; // already-answered questions (facts)
   };
   try {
     body = await request.json();
@@ -44,7 +46,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'bad_request', message: 'Invalid JSON body.' }, { status: 400 });
   }
 
-  const { mealName, description, photoDataUrl, knownAllergies = [], language = 'pt', statedIngredients = [] } = body;
+  const { mealName, description, photoDataUrl, knownAllergies = [], language = 'pt', statedIngredients = [], clarifications = [] } = body;
   if (!mealName?.trim() && !photoDataUrl) {
     return NextResponse.json({ error: 'bad_request', message: 'A meal name or a photo is required.' }, { status: 400 });
   }
@@ -73,9 +75,12 @@ export async function POST(request: Request) {
     `do not ignore it.\n` +
     `CALORIES: return "calorieRange" with integer "min" ≤ "estimate" ≤ "max", and a short "reason" when ` +
     `the band is wide (e.g. unknown amount of oil). Protein/carbs/fat are estimates.\n` +
-    `CLARIFYING QUESTION: if the amount of added fat, sauce, sugar, or the portion size is a MAJOR ` +
-    `uncertainty, set "clarifyingQuestion" to ONE short question in ${langName} with 2–4 quick-pick ` +
-    `"options" (e.g. "~1 tsp", "~1 tbsp", "more"); otherwise omit it.\n` +
+    `COOKING FAT ABSORPTION: when a cooking fat is listed, set "absorbedFraction" (0..1) = the ` +
+    `fraction of that fat that ends up IN THE FOOD (the rest stays in the pan). For pan-frying use ~0.5.\n` +
+    `CLARIFYING QUESTION: if the amount of added fat, the portion size, the sauce type, or the cooking ` +
+    `method is a MAJOR uncertainty, set "clarifyingQuestion" with a fixed "id" ` +
+    `(added_fat_amount | portion_size | sauce_type | cooking_method), a short "text" in ${langName}, and ` +
+    `2–4 quick-pick "options" (e.g. "~1 tsp", "~1 tbsp", "more"). Ask about ONE thing only; otherwise omit it.\n` +
     `"possibleHiddenAllergens": only allergens NOT already obvious from the listed ingredients.\n\n` +
     `Write all natural-language strings in ${langName}.`;
 
@@ -88,6 +93,13 @@ export async function POST(request: Request) {
       '\n\n'
     : '';
 
+  // Established facts from already-answered questions — never ask these again.
+  const clarifyText = clarifications.length
+    ? `ESTABLISHED FACTS (the user already answered these — treat as "stated", use them, and do NOT ask ` +
+      `about these ids again): ${clarifications.map((c) => `${c.id}="${c.answer}"`).join('; ')}.\n` +
+      `Already-asked question ids: ${clarifications.map((c) => c.id).join(', ')}.\n\n`
+    : '';
+
   const content: Anthropic.ContentBlockParam[] = [];
   const img = photoDataUrl ? parseDataUrl(photoDataUrl) : null;
   if (img) content.push({ type: 'image', source: { type: 'base64', ...img } });
@@ -97,6 +109,7 @@ export async function POST(request: Request) {
       `Meal name: ${mealName?.trim() || '(none)'}\n` +
       `Description: ${description?.trim() || '(none)'}\n` +
       statedText +
+      clarifyText +
       `${img ? 'A photo is attached. Determine if it is a label or a plate.' : 'No photo; sourceType is "text".'}\n\n` +
       `Extract ingredients (with amounts) and estimate nutrition. Return only the JSON.`,
   });
@@ -123,7 +136,10 @@ export async function POST(request: Request) {
       const parsed = MealModelSchema.safeParse(json);
       if (!parsed.success) continue;
 
-      let analysis = buildMealAnalysis(parsed.data, knownAllergies);
+      let analysis = buildMealAnalysis(parsed.data, knownAllergies, {
+        answeredIds: clarifications.map((c) => c.id),
+        priorRounds: clarifications.length,
+      });
       // Edit-preserving re-run: keep the user's corrected ingredients, recompute allergens.
       if (statedIngredients.length) analysis = applyStated(analysis, statedIngredients, knownAllergies);
       return NextResponse.json(analysis);
@@ -138,17 +154,17 @@ export async function POST(request: Request) {
   );
 }
 
-/** Merge the user's stated ingredients back in and recompute code-owned allergens/risk. */
+/** Merge the user's stated ingredients back in; recompute code-owned allergens + calorie sanity. */
 function applyStated(analysis: MealAnalysis, stated: AnalyzedIngredient[], allergyIds: string[]): MealAnalysis {
   const ingredients = mergeStatedIngredients(analysis.ingredients ?? [], stated);
   const detectedAllergens = crossCheckAllergens(ingredients, allergyIds);
-  return {
+  return applyCalorieSanity({
     ...analysis,
     ingredients,
     detectedAllergens,
     riskLevel: computeRiskLevel(detectedAllergens),
     userEdited: true,
-  };
+  });
 }
 
 function languageName(language: string): string {

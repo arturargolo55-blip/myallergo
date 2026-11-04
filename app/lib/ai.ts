@@ -75,6 +75,7 @@ export async function requestMealAnalysis(
     knownAllergies: string[]; // canonical IDs
     language: Language;
     statedIngredients?: import('../types').AnalyzedIngredient[]; // user-edited items to keep on re-run
+    clarifications?: import('../types').Clarification[]; // already-answered questions (facts)
   },
   signal?: AbortSignal
 ): Promise<AnalyzeResult> {
@@ -111,7 +112,8 @@ export async function reanalyzeMeal(
   log: MealLog,
   answer: string,
   knownAllergies: string[],
-  language: Language
+  language: Language,
+  clarifications?: import('../types').Clarification[]
 ): Promise<AnalyzeResult> {
   const description = [log.description?.trim(), answer.trim()].filter(Boolean).join('. ');
   const statedIngredients = log.analysis?.userEdited ? log.analysis.ingredients : undefined;
@@ -122,6 +124,7 @@ export async function reanalyzeMeal(
     knownAllergies,
     language,
     statedIngredients,
+    clarifications,
   });
 }
 

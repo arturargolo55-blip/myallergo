@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import { AllergenMatch, AnalyzedIngredient, CalorieRange, MealAnalysis } from '../types';
 import { crossCheckAllergens, computeRiskLevel, CUSTOM_PREFIX } from '../lib/allergens';
+import { applyCalorieSanity } from '../lib/analysis';
 import { useLanguage } from './LanguageProvider';
 import { TFunction } from '../i18n/translations';
 
@@ -37,6 +38,10 @@ export function AnalysisEditor({
   const [fat, setFat] = useState(analysis.macros ? String(analysis.macros.fat_g) : '');
   const [suppressed, setSuppressed] = useState<Set<string>>(new Set());
   const [extra, setExtra] = useState<Set<string>>(new Set());
+  // % of added cooking fat that stays in the pan (shown only when the model assumed one).
+  const [panPct, setPanPct] = useState(
+    analysis.absorbedFraction != null ? String(Math.round((1 - analysis.absorbedFraction) * 100)) : ''
+  );
 
   // Code-computed allergen matches recompute live as ingredients change.
   const liveMatches = useMemo(() => crossCheckAllergens(ings, userAllergies), [ings, userAllergies]);
@@ -92,16 +97,23 @@ export function AnalysisEditor({
         reason: calorieRange.reason,
       };
     }
-    onSave({
-      ...analysis,
-      ingredients: ings,
-      calories: estimate,
-      calorieRange,
-      macros,
-      detectedAllergens: finalMatches,
-      riskLevel: risk,
-      userEdited: true,
-    });
+    const absorbedFraction =
+      panPct !== '' ? Math.min(1, Math.max(0, 1 - Number(panPct) / 100)) : analysis.absorbedFraction;
+    // Re-run the code sanity-check against the edited amounts/assumption.
+    onSave(
+      applyCalorieSanity({
+        ...analysis,
+        ingredients: ings,
+        calories: estimate,
+        calorieRange,
+        macros,
+        absorbedFraction,
+        calorieNote: undefined, // recomputed by applyCalorieSanity
+        detectedAllergens: finalMatches,
+        riskLevel: risk,
+        userEdited: true,
+      })
+    );
   };
 
   const riskStyle =
@@ -216,6 +228,21 @@ export function AnalysisEditor({
             <p className="text-xs text-gray-400 dark:text-gray-500 mb-2">
               {t('review.range')}: ~{analysis.calorieRange.min}–{analysis.calorieRange.max} {t('ai.kcal')}
             </p>
+          )}
+          {analysis.calorieNote === 'range_widened' && (
+            <p className="text-xs text-amber-600 dark:text-amber-500 mb-2">{t('review.rangeWidened')}</p>
+          )}
+          {panPct !== '' && (
+            <div className="mb-3 flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+              <span>{t('editor.panStart')}</span>
+              <input
+                type="number"
+                value={panPct}
+                onChange={(e) => setPanPct(e.target.value)}
+                className="w-14 px-2 py-1 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-green-500"
+              />
+              <span>{t('editor.panEnd')}</span>
+            </div>
           )}
           <div className="grid grid-cols-4 gap-2">
             {([['review.kcal', cal, setCal], ['review.protein', protein, setProtein], ['review.carbs', carbs, setCarbs], ['review.fat', fat, setFat]] as const).map(

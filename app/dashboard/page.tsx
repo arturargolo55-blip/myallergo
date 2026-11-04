@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
+  Clarification,
   ClarifyingQuestion,
   COMMON_SYMPTOMS,
   Likelihood,
@@ -25,7 +26,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { analyzePatterns, analyzeReactionLog, askAI, buildUserContext, ChatMessage, reanalyzeMeal } from '../lib/ai';
 import { ALLERGENS, CUSTOM_PREFIX, migrateAllergies, needsMigration } from '../lib/allergens';
-import { formatAmount } from '../lib/analysis';
+import { formatAmount, shouldShowClarifyingQuestion } from '../lib/analysis';
 import { appendMessage, clearConversation, deleteConversation, loadConversation } from '../lib/chatStore';
 import { AnalysisEditor } from '../components/AnalysisEditor';
 
@@ -1052,7 +1053,7 @@ function CompactMealCard({
       {(log.analysis || log.analysisStatus === 'pending') && (
         <div className="px-4 pb-3">
           <MealAnalysisBadge log={log} />
-          {log.analysis?.clarifyingQuestion && (
+          {log.analysis && shouldShowClarifyingQuestion(log.analysis) && (
             <button
               onClick={onAnswerClarify}
               className="press mt-2 ml-14 flex items-center gap-1.5 text-xs font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 px-2.5 py-1 rounded-full"
@@ -1281,6 +1282,10 @@ function MealAnalysisBadge({ log }: { log: MealLog }) {
 
       {isV2 && a.riskLevel === 'none_detected' && detectedIds.length === 0 && (
         <p className="text-[11px] text-gray-400 dark:text-gray-500">{t('risk.none_detected.note')}</p>
+      )}
+
+      {a.calorieNote === 'range_widened' && (
+        <p className="text-[11px] text-amber-600 dark:text-amber-500">{t('review.rangeWidened')}</p>
       )}
 
       {a.ingredients && a.ingredients.length > 0 && (
@@ -1642,10 +1647,12 @@ function ChatSheet({
 function ClarifySheet({
   question,
   onAnswer,
+  onDismiss,
   onClose,
 }: {
   question: ClarifyingQuestion;
   onAnswer: (answer: string) => void;
+  onDismiss: () => void;
   onClose: () => void;
 }) {
   const { t } = useLanguage();
@@ -1659,7 +1666,7 @@ function ClarifySheet({
             ×
           </button>
         </div>
-        <p className="text-sm text-gray-700 dark:text-gray-300">❓ {question.question}</p>
+        <p className="text-sm text-gray-700 dark:text-gray-300">❓ {question.text}</p>
         {question.options && question.options.length > 0 && (
           <div className="flex flex-wrap gap-2">
             {question.options.map((opt) => (
@@ -1689,6 +1696,12 @@ function ClarifySheet({
             {t('review.rerun')}
           </button>
         </div>
+        <button
+          onClick={onDismiss}
+          className="press w-full text-sm font-medium text-gray-500 dark:text-gray-400 py-2 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-800"
+        >
+          {t('analysis.notNow')}
+        </button>
       </div>
     </ModalSheet>
   );
@@ -1821,14 +1834,44 @@ export default function DashboardPage() {
     setEditAnalysisLog(null);
   };
 
-  // Answer a clarifying question → re-run analysis (keeps user edits), update in place.
+  // Answer a clarifying question → record it, re-run, and never ask that id again.
   const submitClarify = async (answer: string) => {
     const target = clarifyLog;
     setClarifyLog(null);
-    if (!target) return;
-    patchMealLog(target.id, { analysisStatus: 'pending' });
-    const res = await reanalyzeMeal(target, answer, profile?.allergies ?? [], language);
-    patchMealLog(target.id, res.analysis ? { analysis: res.analysis, analysisStatus: 'done' } : { analysisStatus: 'done' });
+    const q = target?.analysis?.clarifyingQuestion;
+    if (!target || !q) return;
+
+    const record: Clarification = { id: q.id, question: q.text, answer, ts: new Date().toISOString() };
+    const clarifications = [...(target.analysis?.clarifications ?? []), record];
+
+    // Optimistic UI: drop the chip immediately and show pending while we re-run.
+    patchMealLog(target.id, {
+      analysis: { ...target.analysis!, clarifyingQuestion: undefined, clarifications },
+      analysisStatus: 'pending',
+    });
+
+    const res = await reanalyzeMeal(target, answer, profile?.allergies ?? [], language, clarifications);
+    if (res.analysis) {
+      // Keep the recorded clarifications; drop any question whose id was already answered.
+      const answeredIds = new Set(clarifications.map((c) => c.id));
+      const nextQ = res.analysis.clarifyingQuestion && !answeredIds.has(res.analysis.clarifyingQuestion.id)
+        ? res.analysis.clarifyingQuestion
+        : undefined;
+      patchMealLog(target.id, {
+        analysis: { ...res.analysis, clarifications, clarifyingQuestion: nextQ },
+        analysisStatus: 'done',
+      });
+    } else {
+      patchMealLog(target.id, { analysisStatus: 'done' });
+    }
+  };
+
+  // "Not now" — dismiss the chip for this meal until it's re-analyzed from scratch.
+  const dismissClarify = () => {
+    const target = clarifyLog;
+    setClarifyLog(null);
+    if (!target?.analysis) return;
+    patchMealLog(target.id, { analysis: { ...target.analysis, clarifyDismissed: true } });
   };
 
   // One-shot: after a meal is auto-saved on the log page, toast + highlight it here.
@@ -2026,6 +2069,7 @@ export default function DashboardPage() {
         <ClarifySheet
           question={clarifyLog.analysis.clarifyingQuestion}
           onAnswer={submitClarify}
+          onDismiss={dismissClarify}
           onClose={() => setClarifyLog(null)}
         />
       )}

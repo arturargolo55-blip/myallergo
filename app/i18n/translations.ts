@@ -268,12 +268,16 @@ const pt = {
   'analysis.clarifyChip': 'Responda 1 pergunta para melhorar a precisão',
   'analysis.clarifyTitle': 'Melhorar a análise',
   'analysis.editAnalysis': 'Editar análise',
+  'analysis.notNow': 'Agora não',
 
   // ── Editor (on-demand) ──
   'editor.title': 'Editar análise',
   'editor.amt': 'qtd',
   'editor.unit': 'un.',
+  'editor.panStart': 'Assume que ~',
+  'editor.panEnd': '% da gordura fica na panela',
   'review.range': 'Faixa',
+  'review.rangeWidened': 'Faixa ampliada: o total diverge das quantidades informadas.',
 
   // ── Save toast ──
   'toast.saved': '{meal} salvo',
@@ -549,12 +553,16 @@ const en: typeof pt = {
   'analysis.clarifyChip': 'Answer 1 question to improve accuracy',
   'analysis.clarifyTitle': 'Improve the analysis',
   'analysis.editAnalysis': 'Edit analysis',
+  'analysis.notNow': 'Not now',
 
   // ── Editor (on-demand) ──
   'editor.title': 'Edit analysis',
   'editor.amt': 'amt',
   'editor.unit': 'unit',
+  'editor.panStart': 'Assumes ~',
+  'editor.panEnd': '% of the fat stays in the pan',
   'review.range': 'Range',
+  'review.rangeWidened': 'Range widened: the total disagrees with the stated amounts.',
 
   // ── Save toast ──
   'toast.saved': '{meal} saved',
